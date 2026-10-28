@@ -27,16 +27,17 @@ function copyText(txt,btn){
 }
 function legacyCopy(txt){const i=$('#rlink');if(i&&i.value===txt){i.select();try{document.execCommand('copy')}catch(e){}}else{const t=document.createElement('textarea');t.value=txt;document.body.appendChild(t);t.select();try{document.execCommand('copy')}catch(e){}t.remove()}}
 function shareLink(){if(roomLink&&navigator.share)navigator.share({title:'TicTacToe Extended',text:'Play TicTacToe Extended with me',url:roomLink}).catch(()=>{})}
-function toast(msg,ms=2600){const t=$('#toast');t.textContent=msg;if(!t.open)t.show();t.className='show';clearTimeout(t._h);t._h=setTimeout(()=>{t.className='';t.close()},ms)}
-const wbShow=e=>{if(e&&!e.open)e.show()};const wbHide=e=>{if(e&&e.open)e.close()};
+const popOpen=e=>!!(e&&e.matches&&e.matches(':popover-open'));
+function toast(msg,ms=2600){const t=$('#toast');t.textContent=msg;if(!popOpen(t))t.showPopover();t.className='show';clearTimeout(t._h);t._h=setTimeout(()=>{t.className='';if(popOpen(t))t.hidePopover()},ms)}
+const wbShow=e=>{if(e&&!popOpen(e))e.showPopover()};const wbHide=e=>{if(e&&popOpen(e))e.hidePopover()};
 function toastAsk(fromNick,accept,decline){
   const t=$('#toast');t.innerHTML='';
   const s=document.createElement('span');s.textContent=fromNick+' invites you to play';
   const a=document.createElement('button');a.textContent='Accept';a.className='ok';
   const d=document.createElement('button');d.textContent='Decline';
-  a.onclick=()=>{t.className='';t.close();accept()};d.onclick=()=>{t.className='';t.close();decline()};
-  t.append(s,a,d);if(!t.open)t.show();t.className='show ask';
-  clearTimeout(t._h);t._h=setTimeout(()=>{if(t.className){t.className='';t.close();decline(true)}},60000);
+  a.onclick=()=>{t.className='';if(popOpen(t))t.hidePopover();accept()};d.onclick=()=>{t.className='';if(popOpen(t))t.hidePopover();decline()};
+  t.append(s,a,d);if(!popOpen(t))t.showPopover();t.className='show ask';
+  clearTimeout(t._h);t._h=setTimeout(()=>{if(t.className){t.className='';if(popOpen(t))t.hidePopover();decline(true)}},60000);
 }
 
 // ---------- presence ----------
