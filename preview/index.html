@@ -12,9 +12,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <style>
-:root{--ink:#05060f;--tx:#f5f3ee;--dim:#a29fb2;--line:rgba(245,243,238,.13);--glass:rgba(245,243,238,.05);--cell:rgba(245,243,238,.08);--x:#8b9cff;--o:#ff5d8f;--draw:#5a5f75;--r1:10px;--r2:20px}
+:root{--ink:#05060f;--tx:#f5f3ee;--dim:#a29fb2;--line:rgba(245,243,238,.13);--glass:rgba(245,243,238,.05);--cell:rgba(245,243,238,.09);--x:#8b9cff;--o:#ff5d8f;--draw:#5a5f75;--r1:10px;--r2:20px}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%;background:var(--ink);color:var(--tx);font-family:"Bricolage Grotesque",system-ui,sans-serif;overscroll-behavior:none}
+html{background:var(--ink)}
+body{margin:0;min-height:100%;color:var(--tx);font-family:"Bricolage Grotesque",system-ui,sans-serif;overscroll-behavior:none}
 body{display:flex;flex-direction:column;align-items:center;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
 .aurora{position:fixed;inset:0;background:radial-gradient(90% 70% at 70% 12%,#141a55,#05060f 68%);z-index:-2}
 .stars{position:fixed;inset:0;z-index:-1;background-image:radial-gradient(1px 1px at 12% 30%,#fff8,transparent),radial-gradient(1px 1px at 32% 70%,#fff5,transparent),radial-gradient(1.5px 1.5px at 55% 15%,#fff6,transparent),radial-gradient(1px 1px at 78% 45%,#fff5,transparent),radial-gradient(1px 1px at 90% 80%,#fff6,transparent),radial-gradient(1.5px 1.5px at 45% 88%,#fff5,transparent)}
@@ -49,8 +50,8 @@ button.solid{background:var(--o);border-color:var(--o);color:#20050f;font-weight
 .turn.O::before{background:var(--o);box-shadow:0 0 8px var(--o)}
 .turn.D{border-color:var(--line);background:var(--glass);color:var(--dim)}
 .turn.D::before{background:var(--dim);box-shadow:none}
-main{width:100%;max-width:560px;flex:1;display:flex;align-items:center;justify-content:center;padding:0 10px 4px}
-#big{width:min(100%,calc(100svh - 218px));aspect-ratio:1;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:12px;margin:0 auto}
+main{width:100%;max-width:560px;display:flex;align-items:center;justify-content:center;padding:2px 10px 6px}
+#big{width:min(100%,calc(100svh - 330px));min-width:min(100%,300px);aspect-ratio:1;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:12px;margin:0 auto}
 #big.olock .box{opacity:.5}
 .box{position:relative;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:7px;padding:11px;background:var(--glass);border:1.5px solid var(--line);border-radius:var(--r2);backdrop-filter:blur(8px);transition:.2s;min-height:0}
 .box.live{border-color:rgba(139,156,255,.75);box-shadow:0 0 34px rgba(139,156,255,.25),inset 0 0 22px rgba(139,156,255,.08);background:rgba(139,156,255,.07)}
@@ -59,14 +60,14 @@ main{width:100%;max-width:560px;flex:1;display:flex;align-items:center;justify-c
 .box.wl{border-color:#fff;box-shadow:0 0 0 1px #ffffff55,0 0 22px -4px #ffffff66}
 .cell{border:0;border-radius:var(--r1);background:var(--cell);display:flex;align-items:center;justify-content:center;aspect-ratio:1;min-width:0;min-height:0;padding:0;backdrop-filter:none}
 .cell:disabled{opacity:1;cursor:default}
-.cell svg{width:72%;height:72%}
-.cell.can{background:rgba(245,243,238,.13)}
+.cell svg{width:74%;height:74%}
+.cell.can{background:rgba(245,243,238,.15)}
 .cell.can:active{background:rgba(245,243,238,.2)}
 .cell.last{outline:2px solid rgba(245,243,238,.55);outline-offset:-2px}
 .cell.nope{animation:shake .3s ease-out;background:rgba(255,93,143,.28)}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
 .mx{stroke:var(--x)}.mo{stroke:var(--o)}
-.mark{fill:none;stroke-width:9;stroke-linecap:round;animation:pop .22s ease-out backwards;transform-origin:center;transform-box:fill-box}
+.mark{fill:none;stroke-width:10;stroke-linecap:round;animation:pop .22s ease-out backwards;transform-origin:center;transform-box:fill-box}
 @keyframes pop{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:scale(1)}}
 .cell.echo svg{width:58%;height:58%;opacity:.55}
 .cell.echo:has(.mx){background:rgba(139,156,255,.09);box-shadow:inset 0 0 0 1.5px rgba(139,156,255,.5)}
@@ -89,14 +90,15 @@ main{width:100%;max-width:560px;flex:1;display:flex;align-items:center;justify-c
 .cap{position:absolute;inset:0;border-radius:19px;display:none;align-items:center;justify-content:center;animation:pop .3s ease-out backwards}
 .cap.show{display:flex}
 .cap .caplet{font-family:"Instrument Serif",serif;font-size:64px;line-height:1}
-.cap.W.X{background:linear-gradient(160deg,rgba(139,156,255,.34),rgba(139,156,255,.08)),#0b0e1c;box-shadow:inset 0 1px 0 rgba(245,243,238,.3),0 10px 34px rgba(139,156,255,.16)}
+.cap.W.X{background:linear-gradient(160deg,rgba(139,156,255,.42),rgba(139,156,255,.12)),rgba(11,14,28,.6);box-shadow:inset 0 1px 0 rgba(245,243,238,.3),0 10px 34px rgba(139,156,255,.16)}
 .cap.W.X .caplet{color:#dfe4ff}
-.cap.W.O{background:linear-gradient(160deg,rgba(255,93,143,.34),rgba(255,93,143,.08)),#140a12;box-shadow:inset 0 1px 0 rgba(245,243,238,.3),0 10px 34px rgba(255,93,143,.16)}
+.cap.W.O{background:linear-gradient(160deg,rgba(255,93,143,.42),rgba(255,93,143,.12)),rgba(20,10,18,.6);box-shadow:inset 0 1px 0 rgba(245,243,238,.3),0 10px 34px rgba(255,93,143,.16)}
 .cap.W.O .caplet{color:#ffe3ec}
 .cap.D{background:rgba(5,6,15,.88)}
 .cap.D .t{font-size:30px;color:var(--draw);font-weight:800}
 .box:has(.cap.W.X){border-color:var(--x)}
 .box:has(.cap.W.O){border-color:var(--o)}
+.pillrow{display:flex;gap:10px;margin:2px 0 10px;flex-wrap:wrap;justify-content:center;width:100%;max-width:560px}
 #hintrow{width:100%;max-width:560px;padding:4px 14px 10px;display:flex;gap:10px;align-items:baseline;min-height:30px}
 #hint{color:var(--dim);font-size:13px;flex:1}
 #hint.warn{color:var(--o);font-weight:600;animation:warnpop .25s ease-out}
@@ -159,7 +161,7 @@ label.chk{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--dim
 <div class="aurora"></div><div class="stars"></div><div class="blob b1"></div><div class="blob b2"></div>
 <header>
   <div class="brand">TicTacToe <em>Extended</em></div>
-  <div class="hchips"><button id="online" class="hchip" title="Play online"><span class="dot"></span>Online</button><button id="new" class="hchip" title="New game">New</button><button id="undo" class="hchip" title="Undo">Undo</button><button id="menu" class="hchip" title="Settings">Settings</button></div>
+  <div class="hchips"><button id="online" class="hchip" title="Play online"><span class="dot"></span>Online</button><button id="undo" class="hchip" title="Undo">Undo</button><button id="menu" class="hchip" title="Settings">Settings</button></div>
 </header>
 <div id="status">
   <span class="pl" id="plX"><b class="mX">X</b><span id="nmX">You</span><span class="num mX" id="scX">0</span></span>
@@ -168,6 +170,7 @@ label.chk{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--dim
   <span class="turn" id="chip">X to move</span>
 </div>
 <main><div id="big"></div></main>
+<div class="pillrow"><button id="playbtn" class="acc">Play online</button><button id="new">New game</button><button id="howbtn">How it works</button></div>
 <div id="hintrow"><span id="hint"></span><span id="score"></span></div>
 
 <dialog id="dlg">
@@ -326,7 +329,7 @@ function render(){
   bigEl.classList.toggle('free',!over&&(G.target<0||boxDone(G,G.target)));
   document.querySelectorAll('.box').forEach(box=>{
     const b=+box.dataset.b;
-    box.className='box'+(!over&&liveBoxes.has(b)?' live p'+G.turn:'')+(!over&&!liveBoxes.has(b)?' dim':'');
+    box.className='box'+(!over&&liveBoxes.has(b)?' live p'+G.turn:'')+(!over&&!liveBoxes.has(b)&&!G.owner[b]?' dim':'');
     const cap=box.querySelector('.cap');
     if(G.winner&&G.winner!=='D'){const L=LINES.find(l=>l.every(k=>G.owner[k]===G.winner));box.classList.toggle('wl',!!L&&L.includes(b))}
     const o=G.owner[b],osig=o||'';
@@ -480,6 +483,8 @@ function syncSeg(){
 for(const[id,k]of[['segMode','mode'],['segRule','rule'],['segFirst','first'],['segSpeed','speed']])
   document.querySelectorAll('#'+id+' button').forEach(b=>b.onclick=()=>{cfg[k]=b.dataset.v;syncSeg()});
 $('#menu').onclick=()=>{syncSeg();$('#dlg').showModal()};
+$('#playbtn').onclick=()=>$('#online').click();
+$('#howbtn').onclick=()=>{syncSeg();$('#dlg').showModal()};
 $('#close').onclick=()=>$('#dlg').close();
 $('#start').onclick=()=>{$('#dlg').close();score.X=score.O=score.D=0;newGame()};
 $('#new').onclick=()=>{if(window.Online&&Online.active()){Online.requestRematch();return}newGame()};
