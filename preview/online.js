@@ -173,7 +173,7 @@ Online.tap=function(b,i){
 Online.statusText=function(){
   if(!room)return null;
   const g=T().G;
-  if(spectate)return{chip:g.winner?(g.winner==='D'?'Draw':g.winner+' wins'):g.turn+' to move',hint:'Spectating'};
+  if(spectate)return{chip:g.winner?(g.winner==='D'?'Draw':(T().mkIco?T().mkIco(g.winner):g.winner)+' wins'):(T().mkIco?T().mkIco(g.turn):g.turn)+' to move',hint:'Spectating'};
   if(room.status==='waiting')return{chip:'Waiting…',hint:'Share the invite link'};
   if(g.winner)return null; // default over text
   return{chip:g.turn===seat?'Your move':(room.players[otherSeat()]||{}).nick+' to move',hint:g.turn===seat?'':'Wait for your turn'};
