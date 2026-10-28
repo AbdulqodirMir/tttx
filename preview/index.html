@@ -40,7 +40,7 @@ button.solid{background:var(--o);border-color:var(--o);color:#20050f;font-weight
 .pl b{font-weight:700}
 .pl .num{font-weight:700;font-size:16px;color:var(--tx);font-variant-numeric:tabular-nums}
 .mX{color:var(--x)}.mO{color:var(--o)}
-.pl.me::after{content:"you";font-size:10px;color:var(--x);border:1px solid rgba(139,156,255,.4);border-radius:99px;padding:1px 7px}
+.pl.me{border-bottom:2px solid rgba(139,156,255,.55);border-radius:3px;padding-bottom:2px}
 #plO.me::after{color:var(--o);border-color:rgba(255,93,143,.4)}
 .sepdot{color:var(--dim)}
 #score{color:var(--dim);font-size:12px}
@@ -91,7 +91,8 @@ main{width:100%;max-width:560px;display:flex;align-items:center;justify-content:
 @keyframes opnO{0%{box-shadow:0 0 0 rgba(255,93,143,0)}30%{box-shadow:0 0 14px -2px rgba(255,93,143,.5)}100%{box-shadow:0 0 0 rgba(255,93,143,0)}}
 .cap{position:absolute;inset:0;border-radius:19px;display:none;align-items:center;justify-content:center;animation:pop .3s ease-out backwards}
 .cap.show{display:flex}
-.cap svg{width:60%;height:60%}
+.cap svg{width:60%;height:60%;transform:translateY(4%)}
+.box:has(.cap.show) .cell{visibility:hidden}
 .cap .mark{stroke-width:11}
 .cap.W.X{background:linear-gradient(160deg,rgba(139,156,255,.42),rgba(139,156,255,.12)),rgba(11,14,28,.6);box-shadow:inset 0 1px 0 rgba(245,243,238,.3),0 10px 34px rgba(139,156,255,.16)}
 .cap.W.X .caplet{color:#dfe4ff}
@@ -106,6 +107,12 @@ main{width:100%;max-width:560px;display:flex;align-items:center;justify-content:
 #hint{color:var(--dim);font-size:13px;flex:1}
 #hint.warn{color:var(--o);font-weight:600;animation:warnpop .25s ease-out}
 @keyframes warnpop{from{opacity:.2}to{opacity:1}}
+#capline{min-height:26px;display:flex;justify-content:center;margin:2px 0 4px}
+#capline span{opacity:0;transition:opacity .2s;font-size:12.5px;color:var(--tx);background:rgba(139,156,255,.1);border:1px solid rgba(139,156,255,.35);border-radius:99px;padding:4px 12px}
+#capline.on span{opacity:1}
+.flydot{position:fixed;width:11px;height:11px;border-radius:50%;pointer-events:none;z-index:40;transition:transform .34s ease-in,opacity .12s}
+.flydot.X{background:#8b9cff;box-shadow:0 0 12px 2px rgba(139,156,255,.75)}
+.flydot.O{background:#ff5d8f;box-shadow:0 0 12px 2px rgba(255,93,143,.75)}
 dialog{background:rgba(10,12,24,.95);color:var(--tx);border:1px solid rgba(245,243,238,.2);border-radius:24px;max-width:min(92vw,430px);padding:24px;backdrop-filter:blur(24px);box-shadow:0 24px 80px rgba(0,0,0,.55)}
 dialog.wide{max-width:min(94vw,720px)}
 .dlgcols{display:grid;grid-template-columns:1fr 1fr;gap:24px}
@@ -125,13 +132,16 @@ label.t{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(-
 .step p{margin:0;font-size:13px;line-height:1.5;color:var(--dim)}
 #over{text-align:center}
 #over .big{font-family:"Instrument Serif",serif;font-size:34px;font-weight:400;margin:6px 0 10px}
-#toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(80px);background:rgba(10,12,24,.95);border:1px solid rgba(245,243,238,.2);border-radius:99px;padding:10px 16px;font-size:14px;opacity:0;transition:.25s;display:flex;gap:8px;align-items:center;z-index:50;max-width:92vw;backdrop-filter:blur(24px)}
+#toast{position:fixed;inset:auto;margin:0;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(80px);background:rgba(10,12,24,.95);border:1px solid rgba(245,243,238,.2);border-radius:99px;padding:10px 16px;font-size:14px;opacity:0;transition:.25s;display:flex;gap:8px;align-items:center;z-index:50;max-width:92vw;backdrop-filter:blur(24px)}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast:not([open]){display:none}
 #toast button{padding:6px 12px;font-size:13px}
 #toast button.ok{background:rgba(255,93,143,.16);border-color:rgba(255,93,143,.55)}
 #obar{width:100%;max-width:560px;padding:8px 14px;display:none;align-items:center;gap:10px;font-size:13px;color:var(--tx);box-sizing:border-box}
 #obar button{margin-left:auto;padding:5px 12px;font-size:12px}
-#waitbar{width:100%;max-width:560px;padding:9px 14px;display:none;align-items:center;gap:10px;font-size:13px;color:var(--tx);background:rgba(139,156,255,.08);border:1px solid rgba(139,156,255,.35);border-radius:14px;margin:0 0 8px;box-sizing:border-box}
+#waitbar{position:fixed;inset:auto;margin:0;top:64px;left:50%;transform:translateX(-50%);width:min(560px,92vw);max-width:92vw;padding:9px 14px;align-items:center;gap:10px;font-size:13px;color:var(--tx);background:rgba(139,156,255,.08);border:1px solid rgba(139,156,255,.35);border-radius:14px;margin:0 0 8px;box-sizing:border-box}
+#waitbar[open]{display:flex}
+#waitbar:not([open]){display:none}
 #waitbar button{margin-left:auto;padding:6px 12px;font-size:13px;font-weight:600}
 #waitbar button.ghost{margin-left:0;background:none;font-weight:400}
 #plist{display:flex;flex-direction:column;gap:8px;margin:8px 0}
@@ -146,6 +156,14 @@ label.t{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(-
 #rlinkrow{display:none;gap:8px;margin:10px 0}
 #rlink{flex:1;font:inherit;font-size:12px;color:var(--tx);background:rgba(245,243,238,.06);border:1px solid var(--line);border-radius:12px;padding:9px 12px}
 label.chk{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--dim);margin-top:14px}
+label.chk input{appearance:none;-webkit-appearance:none;width:18px;height:18px;border-radius:6px;border:1.5px solid rgba(139,156,255,.5);background:rgba(139,156,255,.08);cursor:pointer;transition:.15s;margin:0;flex:none}
+label.chk input:checked{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12.5l5 5L20 6.5'/%3E%3C/svg%3E"),linear-gradient(135deg,#6d5cff,#ff5d8f);background-repeat:no-repeat;background-position:center;background-size:12px,cover;border-color:transparent}
+input:focus-visible,button:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid rgba(139,156,255,.65);outline-offset:2px}
+::selection{background:rgba(255,93,143,.35);color:#fff}
+html{scrollbar-width:thin;scrollbar-color:rgba(139,156,255,.35) transparent}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:rgba(139,156,255,.3);border-radius:99px}
+::-webkit-scrollbar-track{background:transparent}
 @media (max-width:640px){
   .brand{font-size:19px}
   .hchip{padding:6px 10px;font-size:12px}
@@ -178,7 +196,7 @@ label.chk{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--dim
 </div>
 <main><div id="big"></div></main>
 <div class="pillrow"><button id="playbtn" class="acc">Play online</button><button id="new">New game</button><button id="howbtn">How it works</button></div>
-<div id="hintrow"><span id="hint"></span><span id="score"></span></div>
+<div id="hintrow"><span id="hint"></span><span id="score"></span></div><div id="capline"><span></span></div>
 
 <dialog id="dlg" class="wide">
   <div class="dlgcols">
@@ -205,8 +223,8 @@ label.chk{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--dim
 <dialog id="over"><div class="big" id="overTxt"></div><p id="overSub"></p><div class="row" style="justify-content:center"><button id="again" class="acc">Play again</button><button id="view">View board</button></div></dialog>
 
 <div id="obar"><span class="dot"></span><span id="oseat"></span><span id="onick"></span><button id="leave">Leave</button></div>
-<div id="waitbar"><span>Room ready - send this link, then stay on this page</span><button id="waitcopy">Copy link</button><button id="waitshare" class="ghost" style="display:none">Share</button><button id="waitcancel" class="ghost" style="display:none">Cancel invite</button></div>
-<div id="toast"></div>
+<dialog id="waitbar"><span>Room ready - send this link, then stay on this page</span><button id="waitcopy">Copy link</button><button id="waitshare" class="ghost" style="display:none">Share</button><button id="waitcancel" class="ghost" style="display:none">Cancel invite</button></dialog>
+<dialog id="toast"></dialog>
 <dialog id="lobby">
   <h2>Play <em>online</em></h2>
   <p class="dim" style="margin:0">You are <b id="mynick"></b> <button id="reshuffle" style="padding:3px 9px;font-size:11px">↻</button> <span class="edit">tap name to edit</span></p>
@@ -234,6 +252,20 @@ const other=p=>p==='X'?'O':'X';
 function fresh(){return{cells:Array.from({length:9},()=>Array(9).fill('')),owner:Array(9).fill(''),turn:cfg.first,target:-1,winner:'',hist:[],last:null,echo:Array.from({length:9},()=>Array(9).fill(0))}}
 function boxFull(g,b){return g.cells[b].every(Boolean)}
 function boxDone(g,b){return !!g.owner[b]||boxFull(g,b)} // owner can be 'D' for drawn
+function boxWinnable(g,b,P){ // can P still complete a line in box b (echoes are real marks, already in cells)
+  if(g.owner[b])return g.owner[b]===P;
+  const c=g.cells[b];
+  for(const L of LINES){let ok=true;for(const i of L){const v=c[i];if(v&&v!==P){ok=false;break}}if(ok)return true}
+  return false;
+}
+function deadGame(g){
+  for(const P of['X','O'])for(const L of LINES){
+    let ok=true;
+    for(const b of L){const o=g.owner[b];if(o&&o!==P){ok=false;break}if(!o&&!boxWinnable(g,b,P)){ok=false;break}}
+    if(ok)return false;
+  }
+  return true;
+}
 function lineWinner(arr){for(const[a,b,c]of LINES)if(arr[a]&&arr[a]!=='D'&&arr[a]===arr[b]&&arr[b]===arr[c])return arr[a];return''}
 function evalBox(g,b){
   const c=g.cells[b];
@@ -247,10 +279,10 @@ const PACE={
   normal:{start:200,stagger:70,beat:140,glowHold:250,markDur:220,popDur:300}
 };
 const pace=()=>PACE[cfg.speed]||PACE.slow;
-function applyEchoes(g,pos){
+function applyEchoes(g,pos,base0){
   if(!g.echo)g.echo=Array.from({length:9},()=>Array(9).fill(0));
   const T=pace();
-  let frontier=[pos],base=T.start;
+  let frontier=[pos],base=(base0!==undefined?base0:T.start);
   const seen=new Set();
   while(frontier.length){
     const next=[];let k=0;
@@ -298,14 +330,21 @@ function play(g,b,i){
   const p=g.turn;
   g.cells[b][i]=p;g.last=[b,i];
   const r=evalBox(g,b);
-  let captured=false;
-  if(r&&!g.owner[b]){g.owner[b]=r;if(r!=='D'){captured=true;g.lastEchoes=[];g.lastChainCaps=[];g.lastChainGlow=[];applyEchoes(g,b)}}
+  let captured=false;g._cascEnd=0;
+  if(r&&!g.owner[b]){g.owner[b]=r;if(r!=='D'){captured=true;g.lastEchoes=[];g.lastChainCaps=[];g.lastChainGlow=[];
+    const T=pace(),dGlow=T.start+T.beat,dCap=dGlow+T.glowHold;
+    if(cfg.rule==='line'){const c=g.cells[b];const L=LINES.find(l=>c[l[0]]&&c[l[0]]===c[l[1]]&&c[l[1]]===c[l[2]]);if(L)g.lastChainGlow.push([b,L,dGlow,r])}
+    g.lastChainCaps.push([b,dCap]);
+    applyEchoes(g,b,dCap+T.popDur);
+    g._cascEnd=Math.max.apply(null,g.lastChainCaps.map(m=>m[1]))+T.popDur;
+  }}
   // in line mode a won box is closed immediately; fill mode closes when full (owner set at full)
   // any capture (incl. chain/echo captures from this move) frees the opponent: play anywhere
   g.target=captured?-1:i;
   const w=lineWinner(g.owner);
   if(w)g.winner=w;
   else if(g.owner.every(Boolean))g.winner='D'; // all boxes closed, no row of 3: draw
+  else if(deadGame(g)){g.winner='D';g.autoDraw=true} // no big line can still be completed: draw
   if(!g.winner&&legal({...g,turn:other(p),target:i}).length===0)g.winner='D'; // safety: no moves left, no row: draw
   g.turn=other(p);
 }
@@ -330,8 +369,26 @@ const O_SVG='<svg viewBox="0 0 100 100"><circle class="mark mo" cx="50" cy="50" 
 const svgOf=v=>v==='X'?X_SVG:v==='O'?O_SVG:'';
 const mkIco=v=>'<span class="mk">'+svgOf(v)+'</span>';
 let fxTimers=[];
+const BNAMES=['top-left','top-center','top-right','middle-left','center','middle-right','bottom-left','bottom-center','bottom-right'];
+function capSay(txt,at){fxTimers.push(setTimeout(()=>{const c=$('#capline');c.querySelector('span').textContent=txt;c.classList.add('on')},at));fxTimers.push(setTimeout(()=>{$('#capline').classList.remove('on')},at+1700))}
+function fly(srcEl,dstEl,pl,at){
+  if(!srcEl||!dstEl)return;
+  const a=srcEl.getBoundingClientRect(),c=dstEl.getBoundingClientRect();
+  const d=document.createElement('div');d.className='flydot '+pl;
+  d.style.left=(a.left+a.width/2-5.5)+'px';d.style.top=(a.top+a.height/2-5.5)+'px';
+  d.style.opacity='0';
+  document.body.appendChild(d);
+  fxTimers.push(setTimeout(()=>{
+    d.style.opacity='1';
+    d.style.transform='translate('+(c.left+c.width/2-(a.left+a.width/2))+'px,'+(c.top+c.height/2-(a.top+a.height/2))+'px) scale(.75)';
+    fxTimers.push(setTimeout(()=>{d.style.opacity='0'},360));
+    fxTimers.push(setTimeout(()=>d.remove(),520));
+  },Math.max(0,at-340)));
+}
 function clearFx(){
   fxTimers.forEach(clearTimeout);fxTimers=[];
+  document.querySelectorAll('.flydot').forEach(el=>el.remove());
+  const cl=$('#capline');if(cl)cl.classList.remove('on');
   document.querySelectorAll('.cell.wgX,.cell.wgO').forEach(el=>el.classList.remove('wgX','wgO'));
   document.querySelectorAll('.box.opnX,.box.opnO').forEach(el=>el.classList.remove('opnX','opnO'));
 }
@@ -359,9 +416,13 @@ function render(){
     });
   });
   if(G.lastEchoes&&G.lastEchoes.length){
+    capSay('echo marks land in every open box',Math.max(0,G.lastEchoes[0][2]-360));
     G.lastEchoes.forEach(m=>{
       const el=document.querySelector('.cell[data-b="'+m[0]+'"][data-i="'+m[1]+'"] .mark');
       if(el)el.style.animationDelay=m[2]+'ms';
+      const src=document.querySelector('.box[data-b="'+m[1]+'"]');
+      const dst=document.querySelector('.cell[data-b="'+m[0]+'"][data-i="'+m[1]+'"]');
+      fly(src,dst,G.cells[m[0]][m[1]]||G.turn,m[2]);
     });
     G.lastEchoes=null;
   }
@@ -373,7 +434,8 @@ function render(){
     G.lastChainCaps=null;
   }
   if(G.lastChainGlow&&G.lastChainGlow.length){
-    G.lastChainGlow.forEach(m=>{
+    G.lastChainGlow.forEach((m,ci)=>{
+      capSay(ci===0?(m[3]+' captured '+BNAMES[m[0]]):('chain x'+(ci+1)+' - '+m[3]+' captured '+BNAMES[m[0]]),m[2]);
       m[1].forEach(i=>{
         const el=document.querySelector('.cell[data-b="'+m[0]+'"][data-i="'+i+'"]');
         if(el){el.classList.add('wg'+m[3]);el.style.animationDelay=m[2]+'ms';fxTimers.push(setTimeout(()=>{el.classList.remove('wg'+m[3]);el.style.animationDelay=''},m[2]+780))}
@@ -388,7 +450,7 @@ function render(){
     });
     G.lastOpps=null;
   }
-  const chip=$('#chip');chip.innerHTML=over?(G.winner==='D'?'Draw':mkIco(G.winner)+' wins'):(cfg.mode==='cpu'&&G.turn==='O'?'CPU thinking…':mkIco(G.turn)+' to move');chip.className='turn '+(G.winner?(G.winner==='D'?'D':G.winner):G.turn);
+  const chip=$('#chip');chip.innerHTML=over?(G.winner==='D'?(G.autoDraw?'Draw - no line left':'Draw'):mkIco(G.winner)+' wins'):(cfg.mode==='cpu'&&G.turn==='O'?'CPU thinking…':mkIco(G.turn)+' to move');chip.className='turn '+(G.winner?(G.winner==='D'?'D':G.winner):G.turn);
   const free=G.target<0||boxDone(G,G.target);
   $('#hint').textContent=over?'':G.target<0?'Play anywhere':free?'Target box is closed. Play any open box.':'Play in the glowing box';
   $('#scX').textContent=score.X;$('#scO').textContent=score.O;
@@ -408,7 +470,7 @@ function render(){
     if(st){chip.innerHTML=st.chip;$('#hint').textContent=st.hint}
   }
 }
-function snapshot(){return JSON.stringify({cells:G.cells,owner:G.owner,turn:G.turn,target:G.target,winner:G.winner,last:G.last,echo:G.echo})}
+function snapshot(){return JSON.stringify({cells:G.cells,owner:G.owner,turn:G.turn,target:G.target,winner:G.winner,autoDraw:G.autoDraw||null,last:G.last,echo:G.echo})}
 function persist(){store.set({cfg,score,game:{...JSON.parse(snapshot()),hist:G.hist}})}
 function tap(b,i){
   if(window.Online&&Online.tap(b,i))return;
@@ -445,7 +507,7 @@ function move(b,i){
   if(G.winner)record();
   if(window.Online&&Online.onLocalMove)Online.onLocalMove();
   persist();render();
-  if(G.winner)setTimeout(showOver,650);
+  if(G.winner)setTimeout(showOver,650+(G._cascEnd||0));
   else maybeCpu();
 }
 function record(){score[G.winner]++}
@@ -453,7 +515,7 @@ function maybeCpu(){
   if(cfg.mode!=='cpu'||G.winner||G.turn!=='O')return;
   if(window.Online&&Online.active())return;
   clearTimeout(cpuTimer);
-  cpuTimer=setTimeout(()=>{if(G.winner||G.turn!=='O')return;const m=cpuPick(G);move(m[0],m[1])},550);
+  cpuTimer=setTimeout(()=>{if(G.winner||G.turn!=='O')return;const m=cpuPick(G);move(m[0],m[1])},550+(G._cascEnd||0));
 }
 // simple heuristic CPU: win box > block box > avoid sending opponent to boxes they can capture > centre/corners
 function cpuPick(g){
@@ -484,7 +546,7 @@ function cpuPick(g){
 function showOver(){
   if(!G.winner)return;
   const w=G.winner;
-  $('#overTxt').innerHTML=w==='D'?'Draw':mkIco(w)+' wins';
+  $('#overTxt').innerHTML=w==='D'?(G.autoDraw?'Draw - no line can be completed':'Draw'):mkIco(w)+' wins';
   const x=G.owner.filter(v=>v==='X').length,o=G.owner.filter(v=>v==='O').length;
   $('#overSub').innerHTML='Boxes captured: '+mkIco('X')+' '+x+' · '+mkIco('O')+' '+o;
   if(!$('#over').open)$('#over').showModal();
@@ -496,6 +558,7 @@ function syncSeg(){
 }
 for(const[id,k]of[['segMode','mode'],['segRule','rule'],['segFirst','first'],['segSpeed','speed']])
   document.querySelectorAll('#'+id+' button').forEach(b=>b.onclick=()=>{cfg[k]=b.dataset.v;syncSeg()});
+for(const d of['dlg','over','lobby']){const el=$('#'+d);el.addEventListener('click',e=>{if(e.target===el)el.close()})}
 $('#menu').onclick=()=>{syncSeg();$('#dlg').showModal()};
 $('#playbtn').onclick=()=>$('#online').click();
 $('#howbtn').onclick=()=>{syncSeg();$('#dlg').showModal()};
@@ -516,7 +579,7 @@ $('#undo').onclick=()=>{
 build();
 if(saved.game&&saved.game.cells){G=saved.game;G.hist=G.hist||[];if(!G.echo)G.echo=Array.from({length:9},()=>Array(9).fill(0));}else G=fresh();
 render();maybeCpu();
-window.__tttx={get G(){return G},mkIco,setG(o){G=o},cfg,score,play:tap,move,badTap,warn,legal:()=>legal(G),oppMap:()=>oppMap(G),pace,render,persist,fresh:()=>{newGame()},localNew:newGame,showOver};
+window.__tttx={get G(){return G},deadGame:()=>deadGame(G),mkIco,setG(o){G=o},cfg,score,play:tap,move,badTap,warn,legal:()=>legal(G),oppMap:()=>oppMap(G),pace,render,persist,fresh:()=>{newGame()},localNew:newGame,showOver};
 </script>
 <script type="module" src="online.js"></script>
 </body>
