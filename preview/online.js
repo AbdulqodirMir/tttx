@@ -86,6 +86,9 @@ async function createRoom(){
 }
 function enterRoom(id,asSeat,spec,keepLobby){
   roomId=id;seat=asSeat;spectate=spec;seenMC=-1;
+  if(!spec)get(ref(db,'invites/'+me.uid)).then(s=>{const v=s.val()||{};
+    for(const[k,iv]of Object.entries(v)){if(iv&&iv.status==='pending'){update(ref(db,'invites/'+me.uid+'/'+k),{status:'busy'}).catch(()=>{});update(ref(db,'rooms/'+iv.roomId),{'players/O':{uid:me.uid,nick:myNick,declined:true,busy:true}}).catch(()=>{})}}
+  }).catch(()=>{});
   set(ref(db,'presence/'+me.uid+'/room'),id).catch(()=>{});
   if(!keepLobby)$('#lobby').close();
   const r=ref(db,'rooms/'+id);
