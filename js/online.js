@@ -29,6 +29,7 @@ function toastAsk(fromNick,accept,decline){
 }
 
 // ---------- presence ----------
+let plistOn=false;
 async function presenceOn(){
   me=await ready;
   const p=ref(db,'presence/'+me.uid);
@@ -36,6 +37,7 @@ async function presenceOn(){
   const beat=()=>set(p,{nick:myNick,ts:serverTimestamp(),hide,room:roomId||null});
   beat();onDisconnect(p).remove();
   clearInterval(hb);hb=setInterval(beat,25000);
+  if(plistOn)return;plistOn=true;
   onValue(ref(db,'presence'),snap=>{
     const v=snap.val()||{},now=Date.now();
     const list=Object.entries(v).filter(([u,p])=>u!==me.uid&&p&&!p.hide&&p.ts&&now-p.ts<70000);
@@ -202,6 +204,23 @@ async function boot(){
   $('#online').onclick=openLobby;
   $('#lclose').onclick=()=>$('#lobby').close();
   $('#reshuffle').onclick=()=>{myNick=nick();localStorage.setItem('tttx-nick',myNick);$('#mynick').textContent=myNick;presenceOn()};
+  const mn=$('#mynick');
+  mn.style.cursor='text';mn.title='Tap to edit';
+  mn.onclick=()=>{
+    if(mn.dataset.editing)return;mn.dataset.editing='1';
+    const inp=document.createElement('input');
+    inp.value=myNick;inp.maxLength=16;inp.id='mynickedit';
+    inp.style.cssText='font:inherit;font-weight:700;background:#0a0d15;border:1px solid var(--line);border-radius:8px;padding:2px 8px;width:10em;color:var(--txt)';
+    mn.replaceWith(inp);inp.focus();inp.select();
+    const done=ok=>{
+      const v=inp.value.trim().slice(0,16);
+      inp.replaceWith(mn);delete mn.dataset.editing;
+      if(ok&&v){myNick=v;localStorage.setItem('tttx-nick',myNick);presenceOn()}
+      mn.textContent=myNick;
+    };
+    inp.onkeydown=e=>{if(e.key==='Enter')done(true);else if(e.key==='Escape')done(false)};
+    inp.onblur=()=>done(true);
+  };
   $('#offlineTgl').onchange=e=>{localStorage.setItem('tttx-hide',e.target.checked?'1':'0');presenceOn()};
   $('#mkroom').onclick=async()=>{
     if(!me)await presenceOn();
