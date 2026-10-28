@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#07090f">
+<title>TicTacToe Extended</title>
+<meta name="description" content="Every move sends your opponent to a new box. Tic Tac Toe, extended.">
+<meta property="og:title" content="TicTacToe Extended">
+<meta property="og:description" content="Every move sends your opponent to a new box.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2307090f'/%3E%3Cpath d='M16 16l16 16M32 16L16 32' stroke='%2322d3ee' stroke-width='5' stroke-linecap='round'/%3E%3Ccircle cx='44' cy='44' r='9' fill='none' stroke='%23f472b6' stroke-width='5'/%3E%3C/svg%3E">
+<style>
+:root{--bg:#07090f;--card:#0f131d;--line:#1e2535;--x:#22d3ee;--o:#f472b6;--txt:#e8ecf5;--dim:#7b869c;--draw:#475066}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overscroll-behavior:none}
+body{display:flex;flex-direction:column;align-items:center;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);background:radial-gradient(900px 500px at 50% -10%,#121a2e 0,transparent 70%),var(--bg)}
+header{width:100%;max-width:560px;display:flex;justify-content:space-between;align-items:center;padding:12px 14px 6px}
+h1{font-size:16px;margin:0;white-space:nowrap;letter-spacing:.3px}
+h1 b{color:var(--x)}h1 i{color:var(--o);font-style:normal}
+.btns{display:flex;gap:6px}
+button{font:inherit;color:var(--txt);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 11px;font-size:13px;cursor:pointer}
+button:active{transform:scale(.96)}
+button:disabled{opacity:.35}
+#status{width:100%;max-width:560px;padding:4px 14px 8px;display:flex;align-items:center;gap:10px;min-height:44px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:15px;padding:6px 12px;border-radius:999px;background:var(--card);border:1px solid var(--line)}
+.chip.X{color:var(--x);box-shadow:0 0 18px -6px var(--x)}.chip.O{color:var(--o);box-shadow:0 0 18px -6px var(--o)}
+#hint{color:var(--dim);font-size:13px;flex:1}
+#score{display:flex;gap:8px;font-size:12px;color:var(--dim)}
+main{width:100%;max-width:560px;flex:1;display:flex;align-items:center;justify-content:center;padding:0 6px 10px}
+#big{width:min(100%,calc(100svh - 190px));aspect-ratio:1;display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:0 auto}
+.box{position:relative;display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:4px;background:var(--card);border:1.5px solid var(--line);border-radius:12px;transition:.2s}
+.box.live{border-color:#fff;box-shadow:0 0 0 1px #ffffff55,0 0 22px -4px #ffffff66}
+.box.live.pX{border-color:var(--x);box-shadow:0 0 22px -3px var(--x)}
+.box.live.pO{border-color:var(--o);box-shadow:0 0 22px -3px var(--o)}
+.box.dim{opacity:.8;border-color:#161c2a}.box.wl{border-color:#fbbf24!important;box-shadow:0 0 22px -3px #fbbf24}
+.cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;background:#0a0d15;border:0;border-radius:6px;padding:0;position:relative;color:var(--txt)}
+.cell.can{background:#141a29}
+.cell.can:active{background:#1d2740}
+.cell svg{width:72%;height:72%}
+.cell.last{outline:2px solid #fbbf24;outline-offset:-2px}
+.mx{stroke:var(--x)}.mo{stroke:var(--o)}
+.mark{fill:none;stroke-width:9;stroke-linecap:round;animation:pop .22s ease-out}
+@keyframes pop{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:scale(1)}}
+.cap{position:absolute;inset:0;border-radius:11px;display:none;align-items:center;justify-content:center;background:#07090fe6;backdrop-filter:blur(1px);animation:pop .3s ease-out}
+.cap.show{display:flex}
+.cap svg{width:70%;height:70%}
+.cap .mark{stroke-width:7}
+.cap.D .t{font-size:30px;color:var(--draw);font-weight:800}
+.cap.W{background:#07090fcc}
+dialog{background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:16px;max-width:min(92vw,420px);padding:18px}
+dialog::backdrop{background:#000a}
+dialog h2{margin:0 0 10px;font-size:18px}
+dialog p,dialog li{font-size:14px;line-height:1.5;color:#c3cbdb}
+dialog ul{padding-left:18px;margin:8px 0}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;border-radius:0;background:transparent;color:var(--dim)}
+.seg button.on{background:#1b2336;color:var(--txt)}
+label.t{font-size:12px;color:var(--dim);display:block;margin-top:10px}
+#over{text-align:center}
+#over .big{font-size:26px;font-weight:800;margin:6px 0 12px}
+</style>
+</head>
+<body>
+<header>
+  <h1><b>TicTacToe</b> <i>Extended</i></h1>
+  <div class="btns"><button id="undo" aria-label="Undo">↶ Undo</button><button id="new">New</button><button id="menu" aria-label="Settings">⚙</button></div>
+</header>
+<div id="status"><span class="chip X" id="chip">X</span><span id="hint"></span><span id="score"></span></div>
+<main><div id="big"></div></main>
+
+<dialog id="dlg">
+  <h2>TicTacToe Extended</h2>
+  <label class="t">Opponent</label>
+  <div class="seg" id="segMode"><button data-v="2p">2 players</button><button data-v="cpu">vs CPU</button></div>
+  <label class="t">Box is captured when</label>
+  <div class="seg" id="segRule"><button data-v="fill">it is full (most marks)</button><button data-v="line">3 in a row</button></div>
+  <label class="t">Who starts</label>
+  <div class="seg" id="segFirst"><button data-v="X">X</button><button data-v="O">O</button></div>
+  <h2 style="margin-top:16px;font-size:15px">How it works</h2>
+  <ul>
+    <li>Each mark you place sends your opponent to the matching box. Mark the top-center cell of any box, and they must play in the top-center box.</li>
+    <li>If that box is full, they can play in any open box.</li>
+    <li>A captured box becomes that player's mark on the big board. Get 3 captured boxes in a row to win.</li>
+  </ul>
+  <div class="row"><button id="start" style="background:#16384a;border-color:#22d3ee">Start game</button><button id="close">Close</button></div>
+</dialog>
+<dialog id="over"><div class="big" id="overTxt"></div><p id="overSub"></p><div class="row" style="justify-content:center"><button id="again" style="background:#16384a;border-color:#22d3ee">Play again</button><button id="view">View board</button></div></dialog>
+
+<script>
+const LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+const $=s=>document.querySelector(s);
+const store={get(){try{return JSON.parse(localStorage.getItem('tttx')||'{}')}catch(e){return{}}},set(o){localStorage.setItem('tttx',JSON.stringify(o))}};
+const saved=store.get();
+const cfg=Object.assign({mode:'2p',rule:'fill',first:'X'},saved.cfg||{});
+const score=Object.assign({X:0,O:0,D:0},saved.score||{});
+let G; // state
+const other=p=>p==='X'?'O':'X';
+
+function fresh(){return{cells:Array.from({length:9},()=>Array(9).fill('')),owner:Array(9).fill(''),turn:cfg.first,target:-1,winner:'',hist:[],last:null}}
+function boxFull(g,b){return g.cells[b].every(Boolean)}
+function boxDone(g,b){return !!g.owner[b]||boxFull(g,b)} // owner can be 'D' for drawn
+function lineWinner(arr){for(const[a,b,c]of LINES)if(arr[a]&&arr[a]!=='D'&&arr[a]===arr[b]&&arr[b]===arr[c])return arr[a];return''}
+function evalBox(g,b){
+  const c=g.cells[b];
+  if(cfg.rule==='line'){const w=lineWinner(c);if(w)return w;return boxFull(g,b)?'D':''}
+  if(!boxFull(g,b))return'';
+  const x=c.filter(v=>v==='X').length,o=9-x;return x>o?'X':o>x?'O':'D';
+}
+function legal(g){
+  const out=[];
+  const free=g.target<0||boxDone(g,g.target);
+  for(let b=0;b<9;b++){
+    if(!free&&b!==g.target)continue;
+    if(g.owner[b]||boxFull(g,b))continue;
+    for(let i=0;i<9;i++)if(!g.cells[b][i])out.push([b,i]);
+  }
+  return out;
+}
+function play(g,b,i){
+  const p=g.turn;
+  g.cells[b][i]=p;g.last=[b,i];
+  const r=evalBox(g,b);
+  if(r&&!g.owner[b])g.owner[b]=r;
+  // in line mode a won box is closed immediately; fill mode closes when full (owner set at full)
+  g.target=i;
+  const w=lineWinner(g.owner);
+  if(w)g.winner=w;
+  else if(g.owner.every(Boolean)){
+    const x=g.owner.filter(v=>v==='X').length,o=g.owner.filter(v=>v==='O').length;
+    g.winner=x>o?'X':o>x?'O':'D';
+  }
+  if(!g.winner&&legal({...g,turn:other(p),target:i}).length===0){ // safety
+    const x=g.owner.filter(v=>v==='X').length,o=g.owner.filter(v=>v==='O').length;
+    g.winner=x>o?'X':o>x?'O':'D';
+  }
+  g.turn=other(p);
+}
+// Line mode: a won box must also block further play in it; legal() already skips owner boxes.
+
+const bigEl=$('#big');
+function build(){
+  bigEl.innerHTML='';
+  for(let b=0;b<9;b++){
+    const box=document.createElement('div');box.className='box';box.dataset.b=b;
+    for(let i=0;i<9;i++){
+      const c=document.createElement('button');c.className='cell';c.dataset.b=b;c.dataset.i=i;
+      c.setAttribute('aria-label','box '+(b+1)+' cell '+(i+1));
+      c.addEventListener('click',()=>tap(b,i));box.appendChild(c);
+    }
+    const cap=document.createElement('div');cap.className='cap';box.appendChild(cap);
+    bigEl.appendChild(box);
+  }
+}
+const X_SVG='<svg viewBox="0 0 100 100"><path class="mark mx" d="M22 22L78 78M78 22L22 78"/></svg>';
+const O_SVG='<svg viewBox="0 0 100 100"><circle class="mark mo" cx="50" cy="50" r="29"/></svg>';
+const svgOf=v=>v==='X'?X_SVG:v==='O'?O_SVG:'';
+function render(){
+  const moves=legal(G),ok=new Set(moves.map(m=>m[0]+'-'+m[1]));
+  const liveBoxes=new Set(moves.map(m=>m[0]));
+  const over=!!G.winner;
+  document.querySelectorAll('.box').forEach(box=>{
+    const b=+box.dataset.b;
+    box.className='box'+(!over&&liveBoxes.has(b)?' live p'+G.turn:'')+(!over&&!liveBoxes.has(b)?' dim':'');
+    const cap=box.querySelector('.cap');
+    if(G.winner&&G.winner!=='D'){const L=LINES.find(l=>l.every(k=>G.owner[k]===G.winner));box.classList.toggle('wl',!!L&&L.includes(b))}
+    const o=G.owner[b];
+    cap.className='cap'+(o?' show '+(o==='D'?'D':'W'):'');
+    cap.innerHTML=o==='D'?'<span class="t">–</span>':svgOf(o);
+    box.querySelectorAll('.cell').forEach(c=>{
+      const i=+c.dataset.i,v=G.cells[b][i];
+      const sig=v||'';
+      if(c.dataset.v!==sig){c.dataset.v=sig;c.innerHTML=svgOf(v)}
+      c.classList.toggle('can',!over&&ok.has(b+'-'+i));
+      c.classList.toggle('last',!!G.last&&G.last[0]===b&&G.last[1]===i);
+      c.disabled=over||!ok.has(b+'-'+i)||(cfg.mode==='cpu'&&G.turn==='O');
+    });
+  });
+  const chip=$('#chip');chip.textContent=over?(G.winner==='D'?'Draw':G.winner+' wins'):(cfg.mode==='cpu'&&G.turn==='O'?'CPU thinking…':G.turn+' to move');chip.className='chip '+(G.winner&&G.winner!=='D'?G.winner:G.turn);
+  const free=G.target<0||boxDone(G,G.target);
+  $('#hint').textContent=over?'':G.target<0?'Play anywhere':free?'Target box is closed. Play any open box.':'Play in the glowing box';
+  $('#score').innerHTML='<span style="color:var(--x)">X '+score.X+'</span><span style="color:var(--o)">O '+score.O+'</span><span>= '+score.D+'</span>';
+  $('#undo').disabled=!G.hist.length||over&&false;
+}
+function snapshot(){return JSON.stringify({cells:G.cells,owner:G.owner,turn:G.turn,target:G.target,winner:G.winner,last:G.last})}
+function persist(){store.set({cfg,score,game:{...JSON.parse(snapshot()),hist:G.hist}})}
+function tap(b,i){
+  if(G.winner)return;
+  if(cfg.mode==='cpu'&&G.turn==='O')return;
+  move(b,i);
+}
+let cpuTimer=0;
+function move(b,i){
+  G.hist.push(snapshot());
+  play(G,b,i);
+  if(G.winner)record();
+  persist();render();
+  if(G.winner)setTimeout(showOver,650);
+  else maybeCpu();
+}
+function record(){score[G.winner]++}
+function maybeCpu(){
+  if(cfg.mode!=='cpu'||G.winner||G.turn!=='O')return;
+  clearTimeout(cpuTimer);
+  cpuTimer=setTimeout(()=>{if(G.winner||G.turn!=='O')return;const m=cpuPick(G);move(m[0],m[1])},550);
+}
+// simple heuristic CPU: win box > block box > avoid sending opponent to boxes they can capture > centre/corners
+function cpuPick(g){
+  const ms=legal(g);let best=-1e9,pick=ms[0];
+  for(const[b,i]of ms){
+    const t=JSON.parse(JSON.stringify({cells:g.cells,owner:g.owner,turn:g.turn,target:g.target,winner:'',hist:[],last:null}));
+    const before=t.owner.filter(v=>v==='O').length;
+    play(t,b,i);
+    let s=Math.random()*2;
+    if(t.winner==='O')s+=1000;
+    s+=(t.owner.filter(v=>v==='O').length-before)*40;
+    // threat of opponent next
+    const nm=legal(t);
+    let danger=0;
+    for(const[nb,ni]of nm){
+      const u=JSON.parse(JSON.stringify(t));play(u,nb,ni);
+      if(u.winner==='X')danger=Math.max(danger,100);
+      else if(u.owner.filter(v=>v==='X').length>t.owner.filter(v=>v==='X').length)danger=Math.max(danger,30);
+    }
+    s-=danger;
+    if(cfg.rule==='line'){const c=g.cells[b];for(const L of LINES)if(L.includes(i)){const mine=L.filter(k=>(k===i)||c[k]==='O').length;const opp=L.some(k=>c[k]==='X');if(!opp)s+=mine*2}}
+    if(i===4)s+=3;else if([0,2,6,8].includes(i))s+=1;
+    if(t.target>=0&&boxDone(t,t.target))s-=4; // gives opponent a free move
+    if(s>best){best=s;pick=[b,i]}
+  }
+  return pick;
+}
+function showOver(){
+  if(!G.winner)return;
+  const w=G.winner;
+  $('#overTxt').innerHTML=w==='D'?'Draw':'<span style="color:var(--'+w.toLowerCase()+')">'+w+'</span> wins';
+  const x=G.owner.filter(v=>v==='X').length,o=G.owner.filter(v=>v==='O').length;
+  $('#overSub').textContent='Boxes captured: X '+x+' · O '+o;
+  if(!$('#over').open)$('#over').showModal();
+}
+function newGame(){clearTimeout(cpuTimer);G=fresh();persist();render();maybeCpu()}
+function syncSeg(){
+  for(const[id,k]of[['segMode','mode'],['segRule','rule'],['segFirst','first']])
+    document.querySelectorAll('#'+id+' button').forEach(b=>b.classList.toggle('on',b.dataset.v===cfg[k]));
+}
+for(const[id,k]of[['segMode','mode'],['segRule','rule'],['segFirst','first']])
+  document.querySelectorAll('#'+id+' button').forEach(b=>b.onclick=()=>{cfg[k]=b.dataset.v;syncSeg()});
+$('#menu').onclick=()=>{syncSeg();$('#dlg').showModal()};
+$('#close').onclick=()=>$('#dlg').close();
+$('#start').onclick=()=>{$('#dlg').close();score.X=score.O=score.D=0;newGame()};
+$('#new').onclick=newGame;
+$('#again').onclick=()=>{$('#over').close();newGame()};
+$('#view').onclick=()=>$('#over').close();
+$('#undo').onclick=()=>{
+  if(!G.hist.length)return;clearTimeout(cpuTimer);
+  const wasOver=!!G.winner;
+  let n=1;if(cfg.mode==='cpu'&&G.hist.length>=2&&G.turn==='X')n=2; // undo CPU reply and own move
+  if(cfg.mode==='cpu'&&G.turn==='O'&&!wasOver)n=1;
+  let s;while(n--&&G.hist.length)s=G.hist.pop();
+  if(wasOver)score[G.winner]=Math.max(0,score[G.winner]-1);
+  const h=G.hist;G=Object.assign(JSON.parse(s),{hist:h});persist();render();maybeCpu();
+};
+build();
+if(saved.game&&saved.game.cells){G=saved.game;G.hist=G.hist||[]}else G=fresh();
+render();maybeCpu();
+window.__tttx={get G(){return G},cfg,play:tap,legal:()=>legal(G)};
+</script>
+</body>
+</html>
