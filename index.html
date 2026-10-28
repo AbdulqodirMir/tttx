@@ -83,10 +83,10 @@ label.t{font-size:12px;color:var(--dim);display:block;margin-top:10px}
 /* v2: echo marks = small ghost (R1) */
 .cell.echo svg{width:58%;height:58%;opacity:.5}
 /* v3: cause signals - winning-line glow before chain capture, faint pulse for new opportunity */
-.cell.wgX{animation:wglX .7s ease-out backwards}
-.cell.wgO{animation:wglO .7s ease-out backwards}
-@keyframes wglX{0%{box-shadow:inset 0 0 0 rgba(34,211,238,0)}25%{background:#12303a;box-shadow:inset 0 0 14px rgba(34,211,238,.55)}100%{background:#0a0d15;box-shadow:inset 0 0 0 rgba(34,211,238,0)}}
-@keyframes wglO{0%{box-shadow:inset 0 0 0 rgba(244,114,182,0)}25%{background:#3a1626;box-shadow:inset 0 0 14px rgba(244,114,182,.55)}100%{background:#0a0d15;box-shadow:inset 0 0 0 rgba(244,114,182,0)}}
+.cell.wgX{animation:wglX 1s ease-out backwards}
+.cell.wgO{animation:wglO 1s ease-out backwards}
+@keyframes wglX{0%{box-shadow:inset 0 0 0 rgba(34,211,238,0)}18%,100%{background:#12303a;box-shadow:inset 0 0 14px rgba(34,211,238,.55)}}
+@keyframes wglO{0%{box-shadow:inset 0 0 0 rgba(244,114,182,0)}18%,100%{background:#3a1626;box-shadow:inset 0 0 14px rgba(244,114,182,.55)}}
 .box.opnX{animation:opnX 1.8s ease-out backwards}
 .box.opnO{animation:opnO 1.8s ease-out backwards}
 @keyframes opnX{0%{box-shadow:0 0 0 rgba(34,211,238,0)}30%{box-shadow:0 0 14px -2px rgba(34,211,238,.5)}100%{box-shadow:0 0 0 rgba(34,211,238,0)}}
@@ -124,6 +124,8 @@ label.chk{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--dim
   <div class="seg" id="segRule"><button data-v="fill">it is full (most marks)</button><button data-v="line">3 in a row</button></div>
   <label class="t">Who starts</label>
   <div class="seg" id="segFirst"><button data-v="X">X</button><button data-v="O">O</button></div>
+  <label class="t">Animation speed</label>
+  <div class="seg" id="segSpeed"><button data-v="slow">Slow</button><button data-v="normal">Normal</button></div>
   <h2 style="margin-top:16px;font-size:15px">How it works</h2>
   <ul>
     <li>Each mark you place sends your opponent to the matching box. Mark the top-center cell of any box, and they must play in the top-center box.</li>
@@ -155,7 +157,7 @@ const LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
 const $=s=>document.querySelector(s);
 const store={get(){try{return JSON.parse(localStorage.getItem('tttx')||'{}')}catch(e){return{}}},set(o){localStorage.setItem('tttx',JSON.stringify(o))}};
 const saved=store.get();
-const cfg=Object.assign({mode:'2p',rule:'line',first:'X'},saved.cfg||{});
+const cfg=Object.assign({mode:'2p',rule:'line',first:'X',speed:'slow'},saved.cfg||{});
 const score=Object.assign({X:0,O:0,D:0},saved.score||{});
 if(cfg.v!==2){cfg.rule='line';cfg.v=2;store.set({cfg,score,game:saved.game})}
 let G; // state
@@ -171,9 +173,16 @@ function evalBox(g,b){
   if(!boxFull(g,b))return'';
   const x=c.filter(v=>v==='X').length,o=9-x;return x>o?'X':o>x?'O':'D';
 }
+// cascade pacing: strictly sequential - each wave fully lands, a beat passes, the winning line glows, then the box flips, then the next wave
+const PACE={
+  slow:{start:250,stagger:140,beat:750,glowHold:700,markDur:220,popDur:300},
+  normal:{start:200,stagger:70,beat:140,glowHold:250,markDur:220,popDur:300}
+};
+const pace=()=>PACE[cfg.speed]||PACE.slow;
 function applyEchoes(g,pos){
   if(!g.echo)g.echo=Array.from({length:9},()=>Array(9).fill(0));
-  let frontier=[pos],base=200;
+  const T=pace();
+  let frontier=[pos],base=T.start;
   const seen=new Set();
   while(frontier.length){
     const next=[];let k=0;
@@ -182,16 +191,18 @@ function applyEchoes(g,pos){
       const pl=g.owner[p];if(!pl||pl==='D')continue;
       for(let b=0;b<9;b++){
         if(g.owner[b])continue;
-        if(!g.cells[b][p]){g.cells[b][p]=pl;g.echo[b][p]=1;if(g.lastEchoes)g.lastEchoes.push([b,p,base+k*70]);k++}
+        if(!g.cells[b][p]){g.cells[b][p]=pl;g.echo[b][p]=1;if(g.lastEchoes)g.lastEchoes.push([b,p,base+k*T.stagger]);k++}
       }
     }
-    const capTime=base+(k?k*70+80:0);
+    const waveEnd=base+(k?(k-1)*T.stagger+T.markDur:0); // last echo mark fully placed
+    const glowTime=waveEnd+T.beat;                    // visible beat, then the cause glow
+    const capTime=glowTime+T.glowHold;                // glow held, then the box flips
     for(let b=0;b<9;b++){
       if(g.owner[b])continue;const r=evalBox(g,b);
       if(r){g.owner[b]=r;if(r!=='D'){next.push(b);if(g.lastChainCaps)g.lastChainCaps.push([b,capTime]);
-        if(g.lastChainGlow&&cfg.rule==='line'){const c=g.cells[b];const L=LINES.find(l=>c[l[0]]&&c[l[0]]===c[l[1]]&&c[l[1]]===c[l[2]]);if(L)g.lastChainGlow.push([b,L,Math.max(0,capTime-250),r])}}}
+        if(g.lastChainGlow&&cfg.rule==='line'){const c=g.cells[b];const L=LINES.find(l=>c[l[0]]&&c[l[0]]===c[l[1]]&&c[l[1]]===c[l[2]]);if(L)g.lastChainGlow.push([b,L,glowTime,r])}}}
     }
-    base=next.length?capTime+140:capTime; // next echo wave starts after the chain-captured box pops
+    base=next.length?capTime+T.popDur:capTime; // next wave starts after the captured box finishes flipping
     frontier=next;
   }
 }
@@ -350,7 +361,7 @@ function move(b,i){
   G.hist.push(snapshot());
   play(G,b,i);
   const afterOpp=oppMap(G);
-  const od=G.lastEchoes&&G.lastEchoes.length?Math.max.apply(null,G.lastEchoes.map(e=>e[2]))+120:0;
+  const od=G.lastEchoes&&G.lastEchoes.length?Math.max.apply(null,G.lastEchoes.map(e=>e[2]))+240:0;
   G.lastOpps=null;
   for(const b in afterOpp)if(beforeOpp[b]!==afterOpp[b]){(G.lastOpps=G.lastOpps||[]).push([+b,afterOpp[b],od])}
   if(G.winner)record();
@@ -401,10 +412,10 @@ function showOver(){
 }
 function newGame(){clearTimeout(cpuTimer);G=fresh();persist();render();maybeCpu()}
 function syncSeg(){
-  for(const[id,k]of[['segMode','mode'],['segRule','rule'],['segFirst','first']])
+  for(const[id,k]of[['segMode','mode'],['segRule','rule'],['segFirst','first'],['segSpeed','speed']])
     document.querySelectorAll('#'+id+' button').forEach(b=>b.classList.toggle('on',b.dataset.v===cfg[k]));
 }
-for(const[id,k]of[['segMode','mode'],['segRule','rule'],['segFirst','first']])
+for(const[id,k]of[['segMode','mode'],['segRule','rule'],['segFirst','first'],['segSpeed','speed']])
   document.querySelectorAll('#'+id+' button').forEach(b=>b.onclick=()=>{cfg[k]=b.dataset.v;syncSeg()});
 $('#menu').onclick=()=>{syncSeg();$('#dlg').showModal()};
 $('#close').onclick=()=>$('#dlg').close();
@@ -424,7 +435,7 @@ $('#undo').onclick=()=>{
 build();
 if(saved.game&&saved.game.cells){G=saved.game;G.hist=G.hist||[];if(!G.echo)G.echo=Array.from({length:9},()=>Array(9).fill(0));}else G=fresh();
 render();maybeCpu();
-window.__tttx={get G(){return G},setG(o){G=o},cfg,score,play:tap,move,badTap,warn,legal:()=>legal(G),oppMap:()=>oppMap(G),render,persist,fresh:()=>{newGame()},localNew:newGame,showOver};
+window.__tttx={get G(){return G},setG(o){G=o},cfg,score,play:tap,move,badTap,warn,legal:()=>legal(G),oppMap:()=>oppMap(G),pace,render,persist,fresh:()=>{newGame()},localNew:newGame,showOver};
 </script>
 <script type="module" src="js/online.js"></script>
 </body>
