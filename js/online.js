@@ -17,6 +17,15 @@ let hb=0;
 const Online={active:()=>!!room, seat:()=>seat, spectating:()=>spectate};
 window.Online=Online;
 
+let roomLink='';
+function flashBtn(btn){if(!btn)return;const old=btn.textContent;btn.textContent='Copied!';btn.disabled=true;setTimeout(()=>{btn.textContent=old;btn.disabled=false},1800)}
+function copyText(txt,btn){
+  const done=()=>{flashBtn(btn);toast('Link copied')};
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(done).catch(()=>{legacyCopy(txt);done()});
+  else{legacyCopy(txt);done()}
+}
+function legacyCopy(txt){const i=$('#rlink');if(i&&i.value===txt){i.select();try{document.execCommand('copy')}catch(e){}}else{const t=document.createElement('textarea');t.value=txt;document.body.appendChild(t);t.select();try{document.execCommand('copy')}catch(e){}t.remove()}}
+function shareLink(){if(roomLink&&navigator.share)navigator.share({title:'TicTacToe Extended',text:'Play TicTacToe Extended with me',url:roomLink}).catch(()=>{})}
 function toast(msg,ms=2600){const t=$('#toast');t.textContent=msg;t.className='show';clearTimeout(t._h);t._h=setTimeout(()=>t.className='',ms)}
 function toastAsk(fromNick,accept,decline){
   const t=$('#toast');t.innerHTML='';
@@ -68,10 +77,10 @@ async function createRoom(){
   }
   toast('Could not create a room, try again');return null;
 }
-function enterRoom(id,asSeat,spec){
+function enterRoom(id,asSeat,spec,keepLobby){
   roomId=id;seat=asSeat;spectate=spec;seenMC=-1;
   set(ref(db,'presence/'+me.uid+'/room'),id).catch(()=>{});
-  $('#lobby').close();
+  if(!keepLobby)$('#lobby').close();
   const r=ref(db,'rooms/'+id);
   if(roomOff)roomOff();
   roomOff=onValue(r,snap=>{
@@ -81,6 +90,7 @@ function enterRoom(id,asSeat,spec){
     if(v.players){if(v.players.X&&v.players.X.uid===me.uid)seat='X';else if(v.players.O&&v.players.O.uid===me.uid)seat='O'}
     const opp=seat==='X'?v.players&&v.players.O:v.players&&v.players.X;
     $('#obar').style.display='flex';
+    $('#waitbar').style.display=(!spec&&v.status==='waiting')?'flex':'none';
     $('#onick').textContent=spectate?'Spectating':(opp&&opp.nick?('vs '+opp.nick):'Waiting for opponent…');
     if(v.score){const s=T().score;s.X=v.score.X||0;s.O=v.score.O||0;s.D=v.score.D||0}
     if(v.state&&typeof v.moveCount==='number'&&v.moveCount!==seenMC){
@@ -111,6 +121,7 @@ function leaveRoom(){
   set(ref(db,'presence/'+me.uid+'/room'),null).catch(()=>{});
   room=null;roomId=null;seat=null;spectate=false;seenMC=-1;
   $('#obar').style.display='none';
+  $('#waitbar').style.display='none';roomLink='';
   T().localNew();
 }
 Online.leave=leaveRoom;
@@ -194,6 +205,7 @@ function invitesOn(){
 // ---------- UI wiring ----------
 async function openLobby(){
   $('#lobby').showModal();
+  if(roomLink){$('#rlink').value=roomLink;$('#rlinkrow').style.display='flex'}
   $('#mynick').textContent=myNick;
   $('#offlineTgl').checked=localStorage.getItem('tttx-hide')==='1';
   if(!me)await presenceOn();
@@ -226,10 +238,16 @@ async function boot(){
     if(!me)await presenceOn();
     const id=await createRoom();if(!id)return;
     const link=location.origin+location.pathname+'?room='+id;
+    roomLink=link;
     $('#rlink').value=link;$('#rlinkrow').style.display='flex';
-    enterRoom(id,'X',false);
+    $('#rcopied').textContent='Room ready - link copied to your clipboard. Send it to a friend and stay on this page.';
+    copyText(link,$('#copylink'));
+    enterRoom(id,'X',false,true);
   };
-  $('#copylink').onclick=()=>{$('#rlink').select();navigator.clipboard&&navigator.clipboard.writeText($('#rlink').value).then(()=>toast('Link copied')).catch(()=>{document.execCommand&&document.execCommand('copy');toast('Link copied')})};
+  $('#copylink').onclick=()=>copyText($('#rlink').value,$('#copylink'));
+  $('#waitcopy').onclick=()=>copyText(roomLink||$('#rlink').value,$('#waitcopy'));
+  if(navigator.share){$('#sharelink').style.display='';$('#waitshare').style.display=''}
+  $('#sharelink').onclick=shareLink;$('#waitshare').onclick=shareLink;
   $('#leave').onclick=leaveRoom;
   // join via ?room=
   const q=new URLSearchParams(location.search),join=q.get('room');
