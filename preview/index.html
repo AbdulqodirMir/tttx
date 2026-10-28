@@ -134,14 +134,14 @@ label.t{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(-
 #over .big{font-family:"Instrument Serif",serif;font-size:34px;font-weight:400;margin:6px 0 10px}
 #toast{position:fixed;inset:auto;margin:0;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(80px);background:rgba(10,12,24,.95);border:1px solid rgba(245,243,238,.2);border-radius:99px;padding:10px 16px;font-size:14px;opacity:0;transition:.25s;display:flex;gap:8px;align-items:center;z-index:50;max-width:92vw;backdrop-filter:blur(24px)}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-#toast:not([open]){display:none}
+#toast:not(:popover-open){display:none}
 #toast button{padding:6px 12px;font-size:13px}
 #toast button.ok{background:rgba(255,93,143,.16);border-color:rgba(255,93,143,.55)}
 #obar{width:100%;max-width:560px;padding:8px 14px;display:none;align-items:center;gap:10px;font-size:13px;color:var(--tx);box-sizing:border-box}
 #obar button{margin-left:auto;padding:5px 12px;font-size:12px}
 #waitbar{position:fixed;inset:auto;margin:0;top:64px;left:50%;transform:translateX(-50%);width:min(560px,92vw);max-width:92vw;padding:9px 14px;align-items:center;gap:10px;font-size:13px;color:var(--tx);background:rgba(139,156,255,.08);border:1px solid rgba(139,156,255,.35);border-radius:14px;margin:0 0 8px;box-sizing:border-box}
-#waitbar[open]{display:flex}
-#waitbar:not([open]){display:none}
+#waitbar:popover-open{display:flex}
+#waitbar:not(:popover-open){display:none}
 #waitbar button{margin-left:auto;padding:6px 12px;font-size:13px;font-weight:600}
 #waitbar button.ghost{margin-left:0;background:none;font-weight:400}
 #plist{display:flex;flex-direction:column;gap:8px;margin:8px 0}
@@ -223,8 +223,8 @@ html{scrollbar-width:thin;scrollbar-color:rgba(139,156,255,.35) transparent}
 <dialog id="over"><div class="big" id="overTxt"></div><p id="overSub"></p><div class="row" style="justify-content:center"><button id="again" class="acc">Play again</button><button id="view">View board</button></div></dialog>
 
 <div id="obar"><span class="dot"></span><span id="oseat"></span><span id="onick"></span><button id="leave">Leave</button></div>
-<dialog id="waitbar"><span>Room ready - send this link, then stay on this page</span><button id="waitcopy">Copy link</button><button id="waitshare" class="ghost" style="display:none">Share</button><button id="waitcancel" class="ghost" style="display:none">Cancel invite</button></dialog>
-<dialog id="toast"></dialog>
+<div id="waitbar" popover="manual"><span>Room ready - send this link, then stay on this page</span><button id="waitcopy">Copy link</button><button id="waitshare" class="ghost" style="display:none">Share</button><button id="waitcancel" class="ghost" style="display:none">Cancel invite</button></div>
+<div id="toast" popover="manual"></div>
 <dialog id="lobby">
   <h2>Play <em>online</em></h2>
   <p class="dim" style="margin:0">You are <b id="mynick"></b> <button id="reshuffle" style="padding:3px 9px;font-size:11px">↻</button> <span class="edit">tap name to edit</span></p>
