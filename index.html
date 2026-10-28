@@ -41,7 +41,7 @@ main{width:100%;max-width:560px;flex:1;display:flex;align-items:center;justify-c
 .mx{stroke:var(--x)}.mo{stroke:var(--o)}
 .mark{fill:none;stroke-width:9;stroke-linecap:round;animation:pop .22s ease-out backwards;transform-origin:center;transform-box:fill-box}
 @keyframes pop{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:scale(1)}}
-.cap{position:absolute;inset:0;border-radius:11px;display:none;align-items:center;justify-content:center;background:#07090fe6;backdrop-filter:blur(1px);animation:pop .3s ease-out}
+.cap{position:absolute;inset:0;border-radius:11px;display:none;align-items:center;justify-content:center;background:#07090fe6;backdrop-filter:blur(1px);animation:pop .3s ease-out backwards}
 .cap.show{display:flex}
 .cap svg{width:70%;height:70%}
 .cap .mark{stroke-width:7}
@@ -106,7 +106,7 @@ label.t{font-size:12px;color:var(--dim);display:block;margin-top:10px}
     <li>If that box is closed (captured or full), they can play in any open box.</li>
     <li>Capturing a box sets the opponent free: after any capture (including echo chains), their next move can be in any open box.</li>
     <li>Capturing a box also marks the matching cell in every other open box (echo marks). Echoes are real marks: they can complete lines and chain-capture more boxes.</li>
-    <li>A captured box becomes that player's mark on the big board. Get 3 captured boxes in a row to win.</li>
+    <li>A captured box becomes that player's mark on the big board. 3 captured boxes in a row wins — nothing else. If every box closes with no row of 3, it's a draw (box count is just for info).</li>
   </ul>
   <div class="row"><button id="start" style="background:#16384a;border-color:#22d3ee">Start game</button><button id="close">Close</button></div>
 </dialog>
@@ -135,12 +135,25 @@ function evalBox(g,b){
 }
 function applyEchoes(g,pos){
   if(!g.echo)g.echo=Array.from({length:9},()=>Array(9).fill(0));
-  const q=[pos],seen=new Set();
-  while(q.length){
-    const p=q.shift();if(seen.has(p))continue;seen.add(p);
-    const pl=g.owner[p];if(!pl||pl==='D')continue;
-    for(let b=0;b<9;b++){if(g.owner[b])continue;if(!g.cells[b][p]){g.cells[b][p]=pl;g.echo[b][p]=1;if(g.lastEchoes)g.lastEchoes.push([b,p])}}
-    for(let b=0;b<9;b++){if(g.owner[b])continue;const r=evalBox(g,b);if(r){g.owner[b]=r;if(r!=='D')q.push(b)}}
+  let frontier=[pos],base=200;
+  const seen=new Set();
+  while(frontier.length){
+    const next=[];let k=0;
+    for(const p of frontier){
+      if(seen.has(p))continue;seen.add(p);
+      const pl=g.owner[p];if(!pl||pl==='D')continue;
+      for(let b=0;b<9;b++){
+        if(g.owner[b])continue;
+        if(!g.cells[b][p]){g.cells[b][p]=pl;g.echo[b][p]=1;if(g.lastEchoes)g.lastEchoes.push([b,p,base+k*70]);k++}
+      }
+    }
+    const capTime=base+(k?k*70+80:0);
+    for(let b=0;b<9;b++){
+      if(g.owner[b])continue;const r=evalBox(g,b);
+      if(r){g.owner[b]=r;if(r!=='D'){next.push(b);if(g.lastChainCaps)g.lastChainCaps.push([b,capTime])}}
+    }
+    base=next.length?capTime+140:capTime; // next echo wave starts after the chain-captured box pops
+    frontier=next;
   }
 }
 function legal(g){
@@ -158,20 +171,14 @@ function play(g,b,i){
   g.cells[b][i]=p;g.last=[b,i];
   const r=evalBox(g,b);
   let captured=false;
-  if(r&&!g.owner[b]){g.owner[b]=r;if(r!=='D'){captured=true;g.lastEchoes=[];applyEchoes(g,b)}}
+  if(r&&!g.owner[b]){g.owner[b]=r;if(r!=='D'){captured=true;g.lastEchoes=[];g.lastChainCaps=[];applyEchoes(g,b)}}
   // in line mode a won box is closed immediately; fill mode closes when full (owner set at full)
   // any capture (incl. chain/echo captures from this move) frees the opponent: play anywhere
   g.target=captured?-1:i;
   const w=lineWinner(g.owner);
   if(w)g.winner=w;
-  else if(g.owner.every(Boolean)){
-    const x=g.owner.filter(v=>v==='X').length,o=g.owner.filter(v=>v==='O').length;
-    g.winner=x>o?'X':o>x?'O':'D';
-  }
-  if(!g.winner&&legal({...g,turn:other(p),target:i}).length===0){ // safety
-    const x=g.owner.filter(v=>v==='X').length,o=g.owner.filter(v=>v==='O').length;
-    g.winner=x>o?'X':o>x?'O':'D';
-  }
+  else if(g.owner.every(Boolean))g.winner='D'; // all boxes closed, no row of 3: draw
+  if(!g.winner&&legal({...g,turn:other(p),target:i}).length===0)g.winner='D'; // safety: no moves left, no row: draw
   g.turn=other(p);
 }
 // Line mode: a won box must also block further play in it; legal() already skips owner boxes.
@@ -216,11 +223,18 @@ function render(){
     });
   });
   if(G.lastEchoes&&G.lastEchoes.length){
-    G.lastEchoes.forEach((m,idx)=>{
+    G.lastEchoes.forEach(m=>{
       const el=document.querySelector('.cell[data-b="'+m[0]+'"][data-i="'+m[1]+'"] .mark');
-      if(el)el.style.animationDelay=(200+idx*70)+'ms';
+      if(el)el.style.animationDelay=m[2]+'ms';
     });
     G.lastEchoes=null;
+  }
+  if(G.lastChainCaps&&G.lastChainCaps.length){
+    G.lastChainCaps.forEach(m=>{
+      const cap=document.querySelector('.box[data-b="'+m[0]+'"] .cap');
+      if(cap)cap.style.animationDelay=m[1]+'ms';
+    });
+    G.lastChainCaps=null;
   }
   const chip=$('#chip');chip.textContent=over?(G.winner==='D'?'Draw':G.winner+' wins'):(cfg.mode==='cpu'&&G.turn==='O'?'CPU thinking…':G.turn+' to move');chip.className='chip '+(G.winner&&G.winner!=='D'?G.winner:G.turn);
   const free=G.target<0||boxDone(G,G.target);
