@@ -203,12 +203,15 @@ async function sendInvite(toUid,toNick,btn){
   const wc=$('#waitcancel');if(wc){wc.style.display='';wc.onclick=()=>{update(ir,{status:'cancelled'}).catch(()=>{});remove(ref(db,'rooms/'+id)).catch(()=>{});if(sentInvite){sentInvite();sentInvite=null}wb.style.display='none';wc.style.display='none';btn.disabled=false;btn.textContent='Invite';toast('Invite cancelled')}}
   const clearWait=()=>{wb.style.display='none';if(wc)wc.style.display='none'};
   if(sentInvite)sentInvite();
-  sentInvite=onValue(ir,snap=>{
+  const rref=ref(db,'rooms/'+id);
+  const stopWatch=()=>{if(sentInvite){sentInvite();sentInvite=null}};
+  sentInvite=onValue(rref,snap=>{
     const v=snap.val();if(!v)return;
-    if(v.status==='accepted'){sentInvite();sentInvite=null;clearWait();toast(toNick+' joined - game on!');enterRoom(id,'X',false)}
-    else if(v.status==='declined'||v.status==='expired'){sentInvite();sentInvite=null;clearWait();toast(toNick+(v.status==='declined'?' declined':' did not answer'));remove(ref(db,'rooms/'+id)).catch(()=>{})}
+    const o=v.players&&v.players.O;
+    if(o&&o.declined){stopWatch();clearWait();toast(toNick+' declined');remove(rref).catch(()=>{});update(ir,{status:'declined'}).catch(()=>{})}
+    else if(o&&v.status==='playing'){stopWatch();clearWait();toast(toNick+' joined - game on!');enterRoom(id,'X',false)}
   });
-  setTimeout(()=>{get(ir).then(s=>{const v=s.val();if(v&&v.status==='pending'){update(ir,{status:'expired'});remove(ref(db,'rooms/'+id)).catch(()=>{})}})},65000);
+  setTimeout(()=>{if(!sentInvite)return;get(rref).then(s=>{const v=s.val();if(v&&v.status==='waiting'&&!(v.players&&v.players.O)){stopWatch();clearWait();toast(toNick+' did not answer');update(ir,{status:'expired'}).catch(()=>{});remove(rref).catch(()=>{})}})},65000);
 }
 function invitesOn(){
   onValue(ref(db,'invites/'+me.uid),snap=>{
@@ -225,7 +228,7 @@ function invitesOn(){
         await update(ir,{status:'accepted'});
         toast('Game started - you are O');
         enterRoom(iv.roomId,'O',false);
-      },(silent)=>{update(ir,{status:silent?'expired':'declined'}).catch(()=>{})});
+      },(silent)=>{update(ir,{status:silent?'expired':'declined'}).catch(()=>{});if(!silent)update(ref(db,'rooms/'+iv.roomId),{'players/O':{uid:me.uid,nick:myNick,declined:true}}).catch(()=>{})});
       break; // one toast at a time
     }
   });
