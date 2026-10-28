@@ -39,7 +39,7 @@ main{width:100%;max-width:560px;flex:1;display:flex;align-items:center;justify-c
 .cell svg{width:72%;height:72%}
 .cell.last{outline:2px solid #fbbf24;outline-offset:-2px}
 .mx{stroke:var(--x)}.mo{stroke:var(--o)}
-.mark{fill:none;stroke-width:9;stroke-linecap:round;animation:pop .22s ease-out}
+.mark{fill:none;stroke-width:9;stroke-linecap:round;animation:pop .22s ease-out backwards;transform-origin:center;transform-box:fill-box}
 @keyframes pop{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:scale(1)}}
 .cap{position:absolute;inset:0;border-radius:11px;display:none;align-items:center;justify-content:center;background:#07090fe6;backdrop-filter:blur(1px);animation:pop .3s ease-out}
 .cap.show{display:flex}
@@ -69,6 +69,10 @@ label.t{font-size:12px;color:var(--dim);display:block;margin-top:10px}
 .box:has(.cap.W .mx){border-color:var(--x)}
 .box:has(.cap.W .mo){border-color:var(--o)}
 /* v2: free play = soft ring + pulse dot on every open box (B3); single target keeps the strong glow */
+#hint.warn{color:#fbbf24;font-weight:700;animation:warnpop .25s ease-out}
+@keyframes warnpop{from{opacity:.2}to{opacity:1}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+.cell.nope{animation:shake .3s ease-out;background:#3a1a2a}
 @keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
 #big.free .box.live.pX{border-color:rgba(34,211,238,.6);box-shadow:0 0 10px -5px var(--x)}
 #big.free .box.live.pO{border-color:rgba(244,114,182,.6);box-shadow:0 0 10px -5px var(--o)}
@@ -100,6 +104,7 @@ label.t{font-size:12px;color:var(--dim);display:block;margin-top:10px}
   <ul>
     <li>Each mark you place sends your opponent to the matching box. Mark the top-center cell of any box, and they must play in the top-center box.</li>
     <li>If that box is closed (captured or full), they can play in any open box.</li>
+    <li>Capturing a box sets the opponent free: after any capture (including echo chains), their next move can be in any open box.</li>
     <li>Capturing a box also marks the matching cell in every other open box (echo marks). Echoes are real marks: they can complete lines and chain-capture more boxes.</li>
     <li>A captured box becomes that player's mark on the big board. Get 3 captured boxes in a row to win.</li>
   </ul>
@@ -134,7 +139,7 @@ function applyEchoes(g,pos){
   while(q.length){
     const p=q.shift();if(seen.has(p))continue;seen.add(p);
     const pl=g.owner[p];if(!pl||pl==='D')continue;
-    for(let b=0;b<9;b++){if(g.owner[b])continue;if(!g.cells[b][p]){g.cells[b][p]=pl;g.echo[b][p]=1}}
+    for(let b=0;b<9;b++){if(g.owner[b])continue;if(!g.cells[b][p]){g.cells[b][p]=pl;g.echo[b][p]=1;if(g.lastEchoes)g.lastEchoes.push([b,p])}}
     for(let b=0;b<9;b++){if(g.owner[b])continue;const r=evalBox(g,b);if(r){g.owner[b]=r;if(r!=='D')q.push(b)}}
   }
 }
@@ -152,9 +157,11 @@ function play(g,b,i){
   const p=g.turn;
   g.cells[b][i]=p;g.last=[b,i];
   const r=evalBox(g,b);
-  if(r&&!g.owner[b]){g.owner[b]=r;if(r!=='D')applyEchoes(g,b)}
+  let captured=false;
+  if(r&&!g.owner[b]){g.owner[b]=r;if(r!=='D'){captured=true;g.lastEchoes=[];applyEchoes(g,b)}}
   // in line mode a won box is closed immediately; fill mode closes when full (owner set at full)
-  g.target=i;
+  // any capture (incl. chain/echo captures from this move) frees the opponent: play anywhere
+  g.target=captured?-1:i;
   const w=lineWinner(g.owner);
   if(w)g.winner=w;
   else if(g.owner.every(Boolean)){
@@ -205,9 +212,16 @@ function render(){
       c.classList.toggle('echo',!!(G.echo&&G.echo[b]&&G.echo[b][i]));
       c.classList.toggle('can',!over&&ok.has(b+'-'+i));
       c.classList.toggle('last',!!G.last&&G.last[0]===b&&G.last[1]===i);
-      c.disabled=over||!ok.has(b+'-'+i)||(cfg.mode==='cpu'&&G.turn==='O');
+      c.disabled=over||(cfg.mode==='cpu'&&G.turn==='O');
     });
   });
+  if(G.lastEchoes&&G.lastEchoes.length){
+    G.lastEchoes.forEach((m,idx)=>{
+      const el=document.querySelector('.cell[data-b="'+m[0]+'"][data-i="'+m[1]+'"] .mark');
+      if(el)el.style.animationDelay=(200+idx*70)+'ms';
+    });
+    G.lastEchoes=null;
+  }
   const chip=$('#chip');chip.textContent=over?(G.winner==='D'?'Draw':G.winner+' wins'):(cfg.mode==='cpu'&&G.turn==='O'?'CPU thinking…':G.turn+' to move');chip.className='chip '+(G.winner&&G.winner!=='D'?G.winner:G.turn);
   const free=G.target<0||boxDone(G,G.target);
   $('#hint').textContent=over?'':G.target<0?'Play anywhere':free?'Target box is closed. Play any open box.':'Play in the glowing box';
@@ -219,7 +233,24 @@ function persist(){store.set({cfg,score,game:{...JSON.parse(snapshot()),hist:G.h
 function tap(b,i){
   if(G.winner)return;
   if(cfg.mode==='cpu'&&G.turn==='O')return;
+  if(!legal(G).some(m=>m[0]===b&&m[1]===i)){badTap(b,i);return}
   move(b,i);
+}
+let warnTimer=0;
+function warn(msg){
+  const h=$('#hint');h.textContent=msg;h.classList.add('warn');
+  clearTimeout(warnTimer);
+  warnTimer=setTimeout(()=>{h.classList.remove('warn');render()},1600);
+}
+function badTap(b,i){
+  let msg;
+  if(G.cells[b][i])msg='That cell is taken';
+  else if(G.owner[b])msg='That box is captured';
+  else if(boxFull(G,b))msg='That box is full';
+  else msg='Play in the glowing box';
+  warn(msg);
+  const el=document.querySelector('.cell[data-b="'+b+'"][data-i="'+i+'"]');
+  if(el){el.classList.add('nope');setTimeout(()=>el.classList.remove('nope'),350)}
 }
 let cpuTimer=0;
 function move(b,i){
