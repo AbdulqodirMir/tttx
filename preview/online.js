@@ -111,7 +111,7 @@ function enterRoom(id,asSeat,spec,keepLobby){
     if(v.state&&typeof v.moveCount==='number'&&v.moveCount!==seenMC){
       const fresh=seenMC===-1;
       seenMC=v.moveCount;
-      if(!fresh||v.moveCount>0||v.state.winner||v.state.last){
+      if(true){
         const h=T().G.hist;
         T().setG(Object.assign(JSON.parse(JSON.stringify(v.state)),{hist:fresh?[]:h}));
         const a=v.anim;
@@ -120,7 +120,7 @@ function enterRoom(id,asSeat,spec,keepLobby){
         if(v.state.winner)setTimeout(()=>T().showOver(),650);
         else if($('#over').open)$('#over').close();
       }
-    }
+    }else T().render(); // refresh names/seat/chip/lock even when no move landed
     // rematch handshake: both flagged -> host resets with swapped seats
     if(v.rematch&&v.rematch.X&&v.rematch.O&&v.host===me.uid){
       const px=v.players.X,po=v.players.O;
