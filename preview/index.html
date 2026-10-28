@@ -107,6 +107,9 @@ main{width:100%;max-width:560px;display:flex;align-items:center;justify-content:
 #hint.warn{color:var(--o);font-weight:600;animation:warnpop .25s ease-out}
 @keyframes warnpop{from{opacity:.2}to{opacity:1}}
 dialog{background:rgba(10,12,24,.95);color:var(--tx);border:1px solid rgba(245,243,238,.2);border-radius:24px;max-width:min(92vw,430px);padding:24px;backdrop-filter:blur(24px);box-shadow:0 24px 80px rgba(0,0,0,.55)}
+dialog.wide{max-width:min(94vw,720px)}
+.dlgcols{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.dlgcol .t:first-of-type{margin-top:10px}
 dialog::backdrop{background:rgba(3,4,10,.82);backdrop-filter:blur(8px)}
 dialog h2{font-family:"Instrument Serif",serif;font-weight:400;font-size:28px;margin:0 0 6px}
 dialog h2 em{color:var(--o)}
@@ -155,6 +158,7 @@ label.chk{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--dim
   .pl{font-size:13px;gap:6px}
   .turn{font-size:12px;padding:5px 11px}
   dialog{padding:18px}
+  .dlgcols{grid-template-columns:1fr;gap:6px}
   #rlinkrow{flex-wrap:wrap}
   #rlink{flex:1 1 100%}
 }
@@ -176,7 +180,9 @@ label.chk{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--dim
 <div class="pillrow"><button id="playbtn" class="acc">Play online</button><button id="new">New game</button><button id="howbtn">How it works</button></div>
 <div id="hintrow"><span id="hint"></span><span id="score"></span></div>
 
-<dialog id="dlg">
+<dialog id="dlg" class="wide">
+  <div class="dlgcols">
+  <div class="dlgcol">
   <h2>Settings</h2>
   <label class="t">Opponent</label>
   <div class="seg" id="segMode"><button data-v="cpu">vs CPU</button><button data-v="2p">Local 2-player</button></div>
@@ -186,16 +192,20 @@ label.chk{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--dim
   <div class="seg" id="segFirst"><button data-v="X"><span class="mk"><svg viewBox="0 0 100 100"><path class="mark mx" d="M22 22L78 78M78 22L22 78"/></svg></span></button><button data-v="O"><span class="mk"><svg viewBox="0 0 100 100"><circle class="mark mo" cx="50" cy="50" r="29"/></svg></span></button></div>
   <label class="t">Animation speed</label>
   <div class="seg" id="segSpeed"><button data-v="slow">Slow</button><button data-v="normal">Normal</button></div>
-  <h2 style="margin-top:18px">How it works</h2>
+  </div>
+  <div class="dlgcol">
+  <h2>How it works</h2>
   <div class="step"><b><span class="n">1 ·</span> You send them</b><p>Your mark sends your opponent to the matching box. Play the top-center cell of any box, and they must play in the top-center box. If that box is closed, they can play in any open box.</p></div>
   <div class="step"><b><span class="n">2 ·</span> Captures echo</b><p>Capturing a box marks the matching cell in every other open box. Echoes are real marks: they can complete lines and chain-capture more boxes. After any capture, the opponent can play in any open box.</p></div>
   <div class="step"><b><span class="n">3 ·</span> Three boxes win</b><p>A captured box counts as your mark on the big board. Three captured boxes in a row wins. If every box closes with no row of three, it's a draw.</p></div>
   <div class="row"><button id="start" class="acc">Start game</button><button id="close">Close</button></div>
+  </div>
+  </div>
 </dialog>
 <dialog id="over"><div class="big" id="overTxt"></div><p id="overSub"></p><div class="row" style="justify-content:center"><button id="again" class="acc">Play again</button><button id="view">View board</button></div></dialog>
 
 <div id="obar"><span class="dot"></span><span id="oseat"></span><span id="onick"></span><button id="leave">Leave</button></div>
-<div id="waitbar"><span>Room ready - send this link, then stay on this page</span><button id="waitcopy">Copy link</button><button id="waitshare" class="ghost" style="display:none">Share</button></div>
+<div id="waitbar"><span>Room ready - send this link, then stay on this page</span><button id="waitcopy">Copy link</button><button id="waitshare" class="ghost" style="display:none">Share</button><button id="waitcancel" class="ghost" style="display:none">Cancel invite</button></div>
 <div id="toast"></div>
 <dialog id="lobby">
   <h2>Play <em>online</em></h2>
