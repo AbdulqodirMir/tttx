@@ -99,6 +99,9 @@ label.t{font-size:12px;color:var(--dim);display:block;margin-top:10px}
 #obar{width:100%;max-width:560px;padding:0 14px 6px;display:none;align-items:center;gap:10px;font-size:13px;color:var(--dim)}
 #obar .dot{width:8px;height:8px;border-radius:50%;background:#34d399;box-shadow:0 0 8px #34d399}
 #obar button{margin-left:auto;padding:5px 9px;font-size:12px}
+#waitbar{width:100%;max-width:560px;padding:8px 14px;display:none;align-items:center;gap:10px;font-size:13px;color:var(--txt);background:#10202c;border:1px solid #22d3ee55;border-radius:10px;margin:0 0 8px;box-sizing:border-box}
+#waitbar button{margin-left:auto;padding:6px 12px;font-size:13px;font-weight:600;background:#16384a;border-color:#22d3ee}
+#waitbar button.ghost{margin-left:0;background:none;font-weight:400}
 #plist{display:flex;flex-direction:column;gap:6px;margin:8px 0}
 .prow{display:flex;justify-content:space-between;align-items:center;background:#0a0d15;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px}
 .prow button{padding:5px 10px;font-size:12px;background:#16384a;border-color:#22d3ee}
@@ -139,13 +142,15 @@ label.chk{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--dim
 <dialog id="over"><div class="big" id="overTxt"></div><p id="overSub"></p><div class="row" style="justify-content:center"><button id="again" style="background:#16384a;border-color:#22d3ee">Play again</button><button id="view">View board</button></div></dialog>
 
 <div id="obar"><span class="dot"></span><span id="oseat"></span><span id="onick"></span><button id="leave">Leave</button></div>
+<div id="waitbar"><span>Room ready - send this link, then stay on this page</span><button id="waitcopy">Copy link</button><button id="waitshare" class="ghost" style="display:none">Share</button></div>
 <div id="toast"></div>
 <dialog id="lobby">
   <h2>Play online</h2>
   <p class="dim">You are <b id="mynick"></b> <button id="reshuffle" style="padding:3px 8px;font-size:11px">↻</button></p>
   <label class="t">Play a friend</label>
   <div class="row"><button id="mkroom" style="background:#16384a;border-color:#22d3ee">Create invite link</button></div>
-  <div id="rlinkrow"><input id="rlink" readonly><button id="copylink">Copy</button></div>
+  <p class="dim" id="rcopied" style="margin:6px 0 0;font-size:12px"></p>
+  <div id="rlinkrow"><input id="rlink" readonly><button id="copylink" style="background:#16384a;border-color:#22d3ee;font-weight:600">Copy link</button><button id="sharelink" style="display:none">Share</button></div>
   <label class="t">Online now (<span id="pcount">0</span>)</label>
   <div id="plist"><p class="dim">Loading…</p></div>
   <label class="chk"><input type="checkbox" id="offlineTgl"> Appear offline (hide me from the list)</label>
