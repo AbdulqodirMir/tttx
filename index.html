@@ -91,12 +91,27 @@ label.t{font-size:12px;color:var(--dim);display:block;margin-top:10px}
 .box.opnO{animation:opnO 1.8s ease-out backwards}
 @keyframes opnX{0%{box-shadow:0 0 0 rgba(34,211,238,0)}30%{box-shadow:0 0 14px -2px rgba(34,211,238,.5)}100%{box-shadow:0 0 0 rgba(34,211,238,0)}}
 @keyframes opnO{0%{box-shadow:0 0 0 rgba(244,114,182,0)}30%{box-shadow:0 0 14px -2px rgba(244,114,182,.5)}100%{box-shadow:0 0 0 rgba(244,114,182,0)}}
+/* v4: online */
+#toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(80px);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:14px;opacity:0;transition:.25s;display:flex;gap:8px;align-items:center;z-index:50;max-width:92vw}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast button{padding:6px 10px;font-size:13px}
+#toast button.ok{background:#16384a;border-color:#22d3ee}
+#obar{width:100%;max-width:560px;padding:0 14px 6px;display:none;align-items:center;gap:10px;font-size:13px;color:var(--dim)}
+#obar .dot{width:8px;height:8px;border-radius:50%;background:#34d399;box-shadow:0 0 8px #34d399}
+#obar button{margin-left:auto;padding:5px 9px;font-size:12px}
+#plist{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.prow{display:flex;justify-content:space-between;align-items:center;background:#0a0d15;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px}
+.prow button{padding:5px 10px;font-size:12px;background:#16384a;border-color:#22d3ee}
+.dim{color:var(--dim);font-size:13px}
+#rlinkrow{display:none;gap:6px;margin:8px 0}
+#rlink{flex:1;font:inherit;font-size:12px;color:var(--txt);background:#0a0d15;border:1px solid var(--line);border-radius:10px;padding:8px}
+label.chk{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--dim);margin-top:10px}
 </style>
 </head>
 <body>
 <header>
   <h1><b>TicTacToe</b> <i>Extended</i></h1>
-  <div class="btns"><button id="undo" aria-label="Undo">↶ Undo</button><button id="new">New</button><button id="menu" aria-label="Settings">⚙</button></div>
+  <div class="btns"><button id="online">🌐 Online</button><button id="undo" aria-label="Undo">↶ Undo</button><button id="new">New</button><button id="menu" aria-label="Settings">⚙</button></div>
 </header>
 <div id="status"><span class="chip X" id="chip">X</span><span id="hint"></span><span id="score"></span></div>
 <main><div id="big"></div></main>
@@ -120,6 +135,20 @@ label.t{font-size:12px;color:var(--dim);display:block;margin-top:10px}
   <div class="row"><button id="start" style="background:#16384a;border-color:#22d3ee">Start game</button><button id="close">Close</button></div>
 </dialog>
 <dialog id="over"><div class="big" id="overTxt"></div><p id="overSub"></p><div class="row" style="justify-content:center"><button id="again" style="background:#16384a;border-color:#22d3ee">Play again</button><button id="view">View board</button></div></dialog>
+
+<div id="obar"><span class="dot"></span><span id="oseat"></span><span id="onick"></span><button id="leave">Leave</button></div>
+<div id="toast"></div>
+<dialog id="lobby">
+  <h2>Play online</h2>
+  <p class="dim">You are <b id="mynick"></b> <button id="reshuffle" style="padding:3px 8px;font-size:11px">↻</button></p>
+  <label class="t">Play a friend</label>
+  <div class="row"><button id="mkroom" style="background:#16384a;border-color:#22d3ee">Create invite link</button></div>
+  <div id="rlinkrow"><input id="rlink" readonly><button id="copylink">Copy</button></div>
+  <label class="t">Online now (<span id="pcount">0</span>)</label>
+  <div id="plist"><p class="dim">Loading…</p></div>
+  <label class="chk"><input type="checkbox" id="offlineTgl"> Appear offline (hide me from the list)</label>
+  <div class="row"><button id="lclose">Close</button></div>
+</dialog>
 
 <script>
 const LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
@@ -283,11 +312,17 @@ function render(){
   const free=G.target<0||boxDone(G,G.target);
   $('#hint').textContent=over?'':G.target<0?'Play anywhere':free?'Target box is closed. Play any open box.':'Play in the glowing box';
   $('#score').innerHTML='<span style="color:var(--x)">X '+score.X+'</span><span style="color:var(--o)">O '+score.O+'</span><span>= '+score.D+'</span>';
-  $('#undo').disabled=!G.hist.length||over&&false;
+  $('#undo').disabled=!G.hist.length||over&&false||!!(window.Online&&Online.active());
+  if(window.Online&&Online.active()){
+    const st=Online.statusText();
+    $('#oseat').textContent=Online.spectating()?'':('You are '+Online.seat());
+    if(st){chip.textContent=st.chip;$('#hint').textContent=st.hint}
+  }
 }
 function snapshot(){return JSON.stringify({cells:G.cells,owner:G.owner,turn:G.turn,target:G.target,winner:G.winner,last:G.last,echo:G.echo})}
 function persist(){store.set({cfg,score,game:{...JSON.parse(snapshot()),hist:G.hist}})}
 function tap(b,i){
+  if(window.Online&&Online.tap(b,i))return;
   if(G.winner)return;
   if(cfg.mode==='cpu'&&G.turn==='O')return;
   if(!legal(G).some(m=>m[0]===b&&m[1]===i)){badTap(b,i);return}
@@ -319,6 +354,7 @@ function move(b,i){
   G.lastOpps=null;
   for(const b in afterOpp)if(beforeOpp[b]!==afterOpp[b]){(G.lastOpps=G.lastOpps||[]).push([+b,afterOpp[b],od])}
   if(G.winner)record();
+  if(window.Online&&Online.onLocalMove)Online.onLocalMove();
   persist();render();
   if(G.winner)setTimeout(showOver,650);
   else maybeCpu();
@@ -373,8 +409,8 @@ for(const[id,k]of[['segMode','mode'],['segRule','rule'],['segFirst','first']])
 $('#menu').onclick=()=>{syncSeg();$('#dlg').showModal()};
 $('#close').onclick=()=>$('#dlg').close();
 $('#start').onclick=()=>{$('#dlg').close();score.X=score.O=score.D=0;newGame()};
-$('#new').onclick=newGame;
-$('#again').onclick=()=>{$('#over').close();newGame()};
+$('#new').onclick=()=>{if(window.Online&&Online.active()){Online.requestRematch();return}newGame()};
+$('#again').onclick=()=>{$('#over').close();if(window.Online&&Online.active()){Online.requestRematch();return}newGame()};
 $('#view').onclick=()=>$('#over').close();
 $('#undo').onclick=()=>{
   if(!G.hist.length)return;clearTimeout(cpuTimer);
@@ -388,7 +424,8 @@ $('#undo').onclick=()=>{
 build();
 if(saved.game&&saved.game.cells){G=saved.game;G.hist=G.hist||[];if(!G.echo)G.echo=Array.from({length:9},()=>Array(9).fill(0));}else G=fresh();
 render();maybeCpu();
-window.__tttx={get G(){return G},cfg,play:tap,legal:()=>legal(G),oppMap:()=>oppMap(G)};
+window.__tttx={get G(){return G},setG(o){G=o},cfg,score,play:tap,move,badTap,warn,legal:()=>legal(G),oppMap:()=>oppMap(G),render,persist,fresh:()=>{newGame()},localNew:newGame,showOver};
 </script>
+<script type="module" src="js/online.js"></script>
 </body>
 </html>
