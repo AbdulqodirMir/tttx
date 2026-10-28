@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#07090f">
 <title>TicTacToe Extended</title>
-<meta name="description" content="Every move sends your opponent to a new box. Tic Tac Toe, extended.">
+<meta name="description" content="Every move sends your opponent to a new box. Captures echo across the board. Tic Tac Toe, extended.">
 <meta property="og:title" content="TicTacToe Extended">
-<meta property="og:description" content="Every move sends your opponent to a new box.">
+<meta property="og:description" content="Every move sends your opponent to a new box. Captures echo across the board.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2307090f'/%3E%3Cpath d='M16 16l16 16M32 16L16 32' stroke='%2322d3ee' stroke-width='5' stroke-linecap='round'/%3E%3Ccircle cx='44' cy='44' r='9' fill='none' stroke='%23f472b6' stroke-width='5'/%3E%3C/svg%3E">
 <style>
 :root{--bg:#07090f;--card:#0f131d;--line:#1e2535;--x:#22d3ee;--o:#f472b6;--txt:#e8ecf5;--dim:#7b869c;--draw:#475066}
@@ -59,6 +59,25 @@ dialog ul{padding-left:18px;margin:8px 0}
 label.t{font-size:12px;color:var(--dim);display:block;margin-top:10px}
 #over{text-align:center}
 #over .big{font-size:26px;font-weight:800;margin:6px 0 12px}
+
+/* v2: captured box = player tile (A3) */
+.cap.W{background:transparent;backdrop-filter:none}
+.box:has(.cap.W .mx) .cap{background:linear-gradient(160deg,rgba(34,211,238,.30),rgba(34,211,238,.12)),#0b101c}
+.box:has(.cap.W .mo) .cap{background:linear-gradient(160deg,rgba(244,114,182,.30),rgba(244,114,182,.12)),#0b101c}
+.cap svg{width:62%;height:62%}
+.cap .mark{stroke-width:11}
+.box:has(.cap.W .mx){border-color:var(--x)}
+.box:has(.cap.W .mo){border-color:var(--o)}
+/* v2: free play = soft ring + pulse dot on every open box (B3); single target keeps the strong glow */
+@keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
+#big.free .box.live.pX{border-color:rgba(34,211,238,.6);box-shadow:0 0 10px -5px var(--x)}
+#big.free .box.live.pO{border-color:rgba(244,114,182,.6);box-shadow:0 0 10px -5px var(--o)}
+#big.free .box.live::after{content:'';position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;animation:pulse 1.6s ease-in-out infinite}
+#big.free .box.live.pX::after{background:var(--x)}
+#big.free .box.live.pO::after{background:var(--o)}
+#big.free .box.dim{opacity:.6}
+/* v2: echo marks = small ghost (R1) */
+.cell.echo svg{width:58%;height:58%;opacity:.5}
 </style>
 </head>
 <body>
@@ -80,7 +99,8 @@ label.t{font-size:12px;color:var(--dim);display:block;margin-top:10px}
   <h2 style="margin-top:16px;font-size:15px">How it works</h2>
   <ul>
     <li>Each mark you place sends your opponent to the matching box. Mark the top-center cell of any box, and they must play in the top-center box.</li>
-    <li>If that box is full, they can play in any open box.</li>
+    <li>If that box is closed (captured or full), they can play in any open box.</li>
+    <li>Capturing a box also marks the matching cell in every other open box (echo marks). Echoes are real marks: they can complete lines and chain-capture more boxes.</li>
     <li>A captured box becomes that player's mark on the big board. Get 3 captured boxes in a row to win.</li>
   </ul>
   <div class="row"><button id="start" style="background:#16384a;border-color:#22d3ee">Start game</button><button id="close">Close</button></div>
@@ -92,12 +112,13 @@ const LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
 const $=s=>document.querySelector(s);
 const store={get(){try{return JSON.parse(localStorage.getItem('tttx')||'{}')}catch(e){return{}}},set(o){localStorage.setItem('tttx',JSON.stringify(o))}};
 const saved=store.get();
-const cfg=Object.assign({mode:'2p',rule:'fill',first:'X'},saved.cfg||{});
+const cfg=Object.assign({mode:'2p',rule:'line',first:'X'},saved.cfg||{});
 const score=Object.assign({X:0,O:0,D:0},saved.score||{});
+if(cfg.v!==2){cfg.rule='line';cfg.v=2;store.set({cfg,score,game:saved.game})}
 let G; // state
 const other=p=>p==='X'?'O':'X';
 
-function fresh(){return{cells:Array.from({length:9},()=>Array(9).fill('')),owner:Array(9).fill(''),turn:cfg.first,target:-1,winner:'',hist:[],last:null}}
+function fresh(){return{cells:Array.from({length:9},()=>Array(9).fill('')),owner:Array(9).fill(''),turn:cfg.first,target:-1,winner:'',hist:[],last:null,echo:Array.from({length:9},()=>Array(9).fill(0))}}
 function boxFull(g,b){return g.cells[b].every(Boolean)}
 function boxDone(g,b){return !!g.owner[b]||boxFull(g,b)} // owner can be 'D' for drawn
 function lineWinner(arr){for(const[a,b,c]of LINES)if(arr[a]&&arr[a]!=='D'&&arr[a]===arr[b]&&arr[b]===arr[c])return arr[a];return''}
@@ -106,6 +127,16 @@ function evalBox(g,b){
   if(cfg.rule==='line'){const w=lineWinner(c);if(w)return w;return boxFull(g,b)?'D':''}
   if(!boxFull(g,b))return'';
   const x=c.filter(v=>v==='X').length,o=9-x;return x>o?'X':o>x?'O':'D';
+}
+function applyEchoes(g,pos){
+  if(!g.echo)g.echo=Array.from({length:9},()=>Array(9).fill(0));
+  const q=[pos],seen=new Set();
+  while(q.length){
+    const p=q.shift();if(seen.has(p))continue;seen.add(p);
+    const pl=g.owner[p];if(!pl||pl==='D')continue;
+    for(let b=0;b<9;b++){if(g.owner[b])continue;if(!g.cells[b][p]){g.cells[b][p]=pl;g.echo[b][p]=1}}
+    for(let b=0;b<9;b++){if(g.owner[b])continue;const r=evalBox(g,b);if(r){g.owner[b]=r;if(r!=='D')q.push(b)}}
+  }
 }
 function legal(g){
   const out=[];
@@ -121,7 +152,7 @@ function play(g,b,i){
   const p=g.turn;
   g.cells[b][i]=p;g.last=[b,i];
   const r=evalBox(g,b);
-  if(r&&!g.owner[b])g.owner[b]=r;
+  if(r&&!g.owner[b]){g.owner[b]=r;if(r!=='D')applyEchoes(g,b)}
   // in line mode a won box is closed immediately; fill mode closes when full (owner set at full)
   g.target=i;
   const w=lineWinner(g.owner);
@@ -159,18 +190,19 @@ function render(){
   const moves=legal(G),ok=new Set(moves.map(m=>m[0]+'-'+m[1]));
   const liveBoxes=new Set(moves.map(m=>m[0]));
   const over=!!G.winner;
+  bigEl.classList.toggle('free',!over&&(G.target<0||boxDone(G,G.target)));
   document.querySelectorAll('.box').forEach(box=>{
     const b=+box.dataset.b;
     box.className='box'+(!over&&liveBoxes.has(b)?' live p'+G.turn:'')+(!over&&!liveBoxes.has(b)?' dim':'');
     const cap=box.querySelector('.cap');
     if(G.winner&&G.winner!=='D'){const L=LINES.find(l=>l.every(k=>G.owner[k]===G.winner));box.classList.toggle('wl',!!L&&L.includes(b))}
-    const o=G.owner[b];
-    cap.className='cap'+(o?' show '+(o==='D'?'D':'W'):'');
-    cap.innerHTML=o==='D'?'<span class="t">–</span>':svgOf(o);
+    const o=G.owner[b],osig=o||'';
+    if(cap.dataset.o!==osig){cap.dataset.o=osig;cap.className='cap'+(o?' show '+(o==='D'?'D':'W'):'');cap.innerHTML=o==='D'?'<span class="t">–</span>':svgOf(o)}
     box.querySelectorAll('.cell').forEach(c=>{
       const i=+c.dataset.i,v=G.cells[b][i];
       const sig=v||'';
       if(c.dataset.v!==sig){c.dataset.v=sig;c.innerHTML=svgOf(v)}
+      c.classList.toggle('echo',!!(G.echo&&G.echo[b]&&G.echo[b][i]));
       c.classList.toggle('can',!over&&ok.has(b+'-'+i));
       c.classList.toggle('last',!!G.last&&G.last[0]===b&&G.last[1]===i);
       c.disabled=over||!ok.has(b+'-'+i)||(cfg.mode==='cpu'&&G.turn==='O');
@@ -182,7 +214,7 @@ function render(){
   $('#score').innerHTML='<span style="color:var(--x)">X '+score.X+'</span><span style="color:var(--o)">O '+score.O+'</span><span>= '+score.D+'</span>';
   $('#undo').disabled=!G.hist.length||over&&false;
 }
-function snapshot(){return JSON.stringify({cells:G.cells,owner:G.owner,turn:G.turn,target:G.target,winner:G.winner,last:G.last})}
+function snapshot(){return JSON.stringify({cells:G.cells,owner:G.owner,turn:G.turn,target:G.target,winner:G.winner,last:G.last,echo:G.echo})}
 function persist(){store.set({cfg,score,game:{...JSON.parse(snapshot()),hist:G.hist}})}
 function tap(b,i){
   if(G.winner)return;
@@ -261,7 +293,7 @@ $('#undo').onclick=()=>{
   const h=G.hist;G=Object.assign(JSON.parse(s),{hist:h});persist();render();maybeCpu();
 };
 build();
-if(saved.game&&saved.game.cells){G=saved.game;G.hist=G.hist||[]}else G=fresh();
+if(saved.game&&saved.game.cells){G=saved.game;G.hist=G.hist||[];if(!G.echo)G.echo=Array.from({length:9},()=>Array(9).fill(0));}else G=fresh();
 render();maybeCpu();
 window.__tttx={get G(){return G},cfg,play:tap,legal:()=>legal(G)};
 </script>
