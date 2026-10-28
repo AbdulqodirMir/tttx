@@ -38,7 +38,7 @@ button.solid{background:var(--o);border-color:var(--o);color:#20050f;font-weight
 #status{width:100%;max-width:560px;padding:6px 14px 10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:40px}
 .pl{display:flex;align-items:center;gap:7px;color:var(--dim);font-size:14px}
 .pl b{font-weight:700}
-.pl .num{font-weight:700;font-size:16px;color:var(--tx)}
+.pl .num{font-weight:700;font-size:16px;color:var(--tx);font-variant-numeric:tabular-nums}
 .mX{color:var(--x)}.mO{color:var(--o)}
 .pl.me::after{content:"you";font-size:10px;color:var(--x);border:1px solid rgba(139,156,255,.4);border-radius:99px;padding:1px 7px}
 #plO.me::after{color:var(--o);border-color:rgba(255,93,143,.4)}
@@ -67,6 +67,8 @@ main{width:100%;max-width:560px;display:flex;align-items:center;justify-content:
 .cell.nope{animation:shake .3s ease-out;background:rgba(255,93,143,.28)}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
 .mx{stroke:var(--x)}.mo{stroke:var(--o)}
+.mk{display:inline-flex;width:1em;height:1em;vertical-align:-0.12em}
+.mk svg{width:100%;height:100%}
 .mark{fill:none;stroke-width:10;stroke-linecap:round;animation:pop .22s ease-out backwards;transform-origin:center;transform-box:fill-box}
 @keyframes pop{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:scale(1)}}
 .cell.echo svg{width:58%;height:58%;opacity:.55}
@@ -89,7 +91,8 @@ main{width:100%;max-width:560px;display:flex;align-items:center;justify-content:
 @keyframes opnO{0%{box-shadow:0 0 0 rgba(255,93,143,0)}30%{box-shadow:0 0 14px -2px rgba(255,93,143,.5)}100%{box-shadow:0 0 0 rgba(255,93,143,0)}}
 .cap{position:absolute;inset:0;border-radius:19px;display:none;align-items:center;justify-content:center;animation:pop .3s ease-out backwards}
 .cap.show{display:flex}
-.cap .caplet{font-family:"Instrument Serif",serif;font-size:64px;line-height:1}
+.cap svg{width:60%;height:60%}
+.cap .mark{stroke-width:11}
 .cap.W.X{background:linear-gradient(160deg,rgba(139,156,255,.42),rgba(139,156,255,.12)),rgba(11,14,28,.6);box-shadow:inset 0 1px 0 rgba(245,243,238,.3),0 10px 34px rgba(139,156,255,.16)}
 .cap.W.X .caplet{color:#dfe4ff}
 .cap.W.O{background:linear-gradient(160deg,rgba(255,93,143,.42),rgba(255,93,143,.12)),rgba(20,10,18,.6);box-shadow:inset 0 1px 0 rgba(245,243,238,.3),0 10px 34px rgba(255,93,143,.16)}
@@ -164,9 +167,9 @@ label.chk{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--dim
   <div class="hchips"><button id="online" class="hchip" title="Play online"><span class="dot"></span>Online</button><button id="undo" class="hchip" title="Undo">Undo</button><button id="menu" class="hchip" title="Settings">Settings</button></div>
 </header>
 <div id="status">
-  <span class="pl" id="plX"><b class="mX">X</b><span id="nmX">You</span><span class="num mX" id="scX">0</span></span>
+  <span class="pl" id="plX"><span class="mk"><svg viewBox="0 0 100 100"><path class="mark mx" d="M22 22L78 78M78 22L22 78"/></svg></span><span id="nmX">You</span><span class="num mX" id="scX">0</span></span>
   <span class="sepdot">·</span>
-  <span class="pl" id="plO"><b class="mO">O</b><span id="nmO">CPU</span><span class="num mO" id="scO">0</span></span>
+  <span class="pl" id="plO"><span class="mk"><svg viewBox="0 0 100 100"><circle class="mark mo" cx="50" cy="50" r="29"/></svg></span><span id="nmO">CPU</span><span class="num mO" id="scO">0</span></span>
   <span class="turn" id="chip">X to move</span>
 </div>
 <main><div id="big"></div></main>
@@ -180,7 +183,7 @@ label.chk{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--dim
   <label class="t">Box is captured when</label>
   <div class="seg" id="segRule"><button data-v="fill">it is full (most marks)</button><button data-v="line">3 in a row</button></div>
   <label class="t">Who starts</label>
-  <div class="seg" id="segFirst"><button data-v="X">X</button><button data-v="O">O</button></div>
+  <div class="seg" id="segFirst"><button data-v="X"><span class="mk"><svg viewBox="0 0 100 100"><path class="mark mx" d="M22 22L78 78M78 22L22 78"/></svg></span></button><button data-v="O"><span class="mk"><svg viewBox="0 0 100 100"><circle class="mark mo" cx="50" cy="50" r="29"/></svg></span></button></div>
   <label class="t">Animation speed</label>
   <div class="seg" id="segSpeed"><button data-v="slow">Slow</button><button data-v="normal">Normal</button></div>
   <h2 style="margin-top:18px">How it works</h2>
@@ -315,6 +318,7 @@ function build(){
 const X_SVG='<svg viewBox="0 0 100 100"><path class="mark mx" d="M22 22L78 78M78 22L22 78"/></svg>';
 const O_SVG='<svg viewBox="0 0 100 100"><circle class="mark mo" cx="50" cy="50" r="29"/></svg>';
 const svgOf=v=>v==='X'?X_SVG:v==='O'?O_SVG:'';
+const mkIco=v=>'<span class="mk">'+svgOf(v)+'</span>';
 let fxTimers=[];
 function clearFx(){
   fxTimers.forEach(clearTimeout);fxTimers=[];
@@ -333,7 +337,7 @@ function render(){
     const cap=box.querySelector('.cap');
     if(G.winner&&G.winner!=='D'){const L=LINES.find(l=>l.every(k=>G.owner[k]===G.winner));box.classList.toggle('wl',!!L&&L.includes(b))}
     const o=G.owner[b],osig=o||'';
-    if(cap.dataset.o!==osig){cap.dataset.o=osig;cap.className='cap'+(o?' show '+(o==='D'?'D':'W '+o):'');cap.innerHTML=o==='D'?'<span class="t">–</span>':'<span class="caplet">'+o+'</span>'}
+    if(cap.dataset.o!==osig){cap.dataset.o=osig;cap.className='cap'+(o?' show '+(o==='D'?'D':'W '+o):'');cap.innerHTML=o==='D'?'<span class="t">–</span>':svgOf(o)}
     box.querySelectorAll('.cell').forEach(c=>{
       const i=+c.dataset.i,v=G.cells[b][i];
       const sig=v||'';
@@ -374,7 +378,7 @@ function render(){
     });
     G.lastOpps=null;
   }
-  const chip=$('#chip');chip.textContent=over?(G.winner==='D'?'Draw':G.winner+' wins'):(cfg.mode==='cpu'&&G.turn==='O'?'CPU thinking…':G.turn+' to move');chip.className='turn '+(G.winner?(G.winner==='D'?'D':G.winner):G.turn);
+  const chip=$('#chip');chip.innerHTML=over?(G.winner==='D'?'Draw':mkIco(G.winner)+' wins'):(cfg.mode==='cpu'&&G.turn==='O'?'CPU thinking…':mkIco(G.turn)+' to move');chip.className='turn '+(G.winner?(G.winner==='D'?'D':G.winner):G.turn);
   const free=G.target<0||boxDone(G,G.target);
   $('#hint').textContent=over?'':G.target<0?'Play anywhere':free?'Target box is closed. Play any open box.':'Play in the glowing box';
   $('#scX').textContent=score.X;$('#scO').textContent=score.O;
@@ -390,8 +394,8 @@ function render(){
   $('#undo').title=onl?'Undo is off in online games':'Undo';
   if(window.Online&&Online.active()){
     const st=Online.statusText();
-    $('#oseat').textContent=Online.spectating()?'':('You are '+Online.seat());
-    if(st){chip.textContent=st.chip;$('#hint').textContent=st.hint}
+    $('#oseat').innerHTML=Online.spectating()?'':('You are '+mkIco(Online.seat()));
+    if(st){chip.innerHTML=st.chip;$('#hint').textContent=st.hint}
   }
 }
 function snapshot(){return JSON.stringify({cells:G.cells,owner:G.owner,turn:G.turn,target:G.target,winner:G.winner,last:G.last,echo:G.echo})}
@@ -470,9 +474,9 @@ function cpuPick(g){
 function showOver(){
   if(!G.winner)return;
   const w=G.winner;
-  $('#overTxt').innerHTML=w==='D'?'Draw':'<span style="color:var(--'+w.toLowerCase()+')">'+w+'</span> wins';
+  $('#overTxt').innerHTML=w==='D'?'Draw':mkIco(w)+' wins';
   const x=G.owner.filter(v=>v==='X').length,o=G.owner.filter(v=>v==='O').length;
-  $('#overSub').textContent='Boxes captured: X '+x+' · O '+o;
+  $('#overSub').innerHTML='Boxes captured: '+mkIco('X')+' '+x+' · '+mkIco('O')+' '+o;
   if(!$('#over').open)$('#over').showModal();
 }
 function newGame(){clearTimeout(cpuTimer);G=fresh();persist();render();maybeCpu()}
@@ -502,7 +506,7 @@ $('#undo').onclick=()=>{
 build();
 if(saved.game&&saved.game.cells){G=saved.game;G.hist=G.hist||[];if(!G.echo)G.echo=Array.from({length:9},()=>Array(9).fill(0));}else G=fresh();
 render();maybeCpu();
-window.__tttx={get G(){return G},setG(o){G=o},cfg,score,play:tap,move,badTap,warn,legal:()=>legal(G),oppMap:()=>oppMap(G),pace,render,persist,fresh:()=>{newGame()},localNew:newGame,showOver};
+window.__tttx={get G(){return G},mkIco,setG(o){G=o},cfg,score,play:tap,move,badTap,warn,legal:()=>legal(G),oppMap:()=>oppMap(G),pace,render,persist,fresh:()=>{newGame()},localNew:newGame,showOver};
 </script>
 <script type="module" src="online.js"></script>
 </body>
