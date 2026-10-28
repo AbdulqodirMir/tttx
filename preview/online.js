@@ -251,6 +251,7 @@ async function openLobby(){
   if(!me)await presenceOn();
 }
 Online.openLobby=openLobby;
+Online.debugInvite=(uid,nick)=>sendInvite(uid,nick,{disabled:false,textContent:'Invite'});
 
 async function boot(){
   $('#online').onclick=openLobby;
