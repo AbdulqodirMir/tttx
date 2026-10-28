@@ -82,6 +82,15 @@ label.t{font-size:12px;color:var(--dim);display:block;margin-top:10px}
 #big.free .box.dim{opacity:.6}
 /* v2: echo marks = small ghost (R1) */
 .cell.echo svg{width:58%;height:58%;opacity:.5}
+/* v3: cause signals - winning-line glow before chain capture, faint pulse for new opportunity */
+.cell.wgX{animation:wglX .7s ease-out backwards}
+.cell.wgO{animation:wglO .7s ease-out backwards}
+@keyframes wglX{0%{box-shadow:inset 0 0 0 rgba(34,211,238,0)}25%{background:#12303a;box-shadow:inset 0 0 14px rgba(34,211,238,.55)}100%{background:#0a0d15;box-shadow:inset 0 0 0 rgba(34,211,238,0)}}
+@keyframes wglO{0%{box-shadow:inset 0 0 0 rgba(244,114,182,0)}25%{background:#3a1626;box-shadow:inset 0 0 14px rgba(244,114,182,.55)}100%{background:#0a0d15;box-shadow:inset 0 0 0 rgba(244,114,182,0)}}
+.box.opnX{animation:opnX 1.8s ease-out backwards}
+.box.opnO{animation:opnO 1.8s ease-out backwards}
+@keyframes opnX{0%{box-shadow:0 0 0 rgba(34,211,238,0)}30%{box-shadow:0 0 14px -2px rgba(34,211,238,.5)}100%{box-shadow:0 0 0 rgba(34,211,238,0)}}
+@keyframes opnO{0%{box-shadow:0 0 0 rgba(244,114,182,0)}30%{box-shadow:0 0 14px -2px rgba(244,114,182,.5)}100%{box-shadow:0 0 0 rgba(244,114,182,0)}}
 </style>
 </head>
 <body>
@@ -150,7 +159,8 @@ function applyEchoes(g,pos){
     const capTime=base+(k?k*70+80:0);
     for(let b=0;b<9;b++){
       if(g.owner[b])continue;const r=evalBox(g,b);
-      if(r){g.owner[b]=r;if(r!=='D'){next.push(b);if(g.lastChainCaps)g.lastChainCaps.push([b,capTime])}}
+      if(r){g.owner[b]=r;if(r!=='D'){next.push(b);if(g.lastChainCaps)g.lastChainCaps.push([b,capTime]);
+        if(g.lastChainGlow&&cfg.rule==='line'){const c=g.cells[b];const L=LINES.find(l=>c[l[0]]&&c[l[0]]===c[l[1]]&&c[l[1]]===c[l[2]]);if(L)g.lastChainGlow.push([b,L,Math.max(0,capTime-250),r])}}}
     }
     base=next.length?capTime+140:capTime; // next echo wave starts after the chain-captured box pops
     frontier=next;
@@ -166,12 +176,22 @@ function legal(g){
   }
   return out;
 }
+function oppMap(g){
+  const m={};
+  for(let b=0;b<9;b++){
+    if(g.owner[b]||boxFull(g,b))continue;
+    let tx=0,to=0;
+    for(const l of LINES){const v=[g.cells[b][l[0]],g.cells[b][l[1]],g.cells[b][l[2]]];const xs=v.filter(x=>x==='X').length,os=v.filter(x=>x==='O').length;if(xs===2&&os===0)tx++;else if(os===2&&xs===0)to++}
+    if(tx>to)m[b]='X';else if(to>tx)m[b]='O';
+  }
+  return m;
+}
 function play(g,b,i){
   const p=g.turn;
   g.cells[b][i]=p;g.last=[b,i];
   const r=evalBox(g,b);
   let captured=false;
-  if(r&&!g.owner[b]){g.owner[b]=r;if(r!=='D'){captured=true;g.lastEchoes=[];g.lastChainCaps=[];applyEchoes(g,b)}}
+  if(r&&!g.owner[b]){g.owner[b]=r;if(r!=='D'){captured=true;g.lastEchoes=[];g.lastChainCaps=[];g.lastChainGlow=[];applyEchoes(g,b)}}
   // in line mode a won box is closed immediately; fill mode closes when full (owner set at full)
   // any capture (incl. chain/echo captures from this move) frees the opponent: play anywhere
   g.target=captured?-1:i;
@@ -200,7 +220,14 @@ function build(){
 const X_SVG='<svg viewBox="0 0 100 100"><path class="mark mx" d="M22 22L78 78M78 22L22 78"/></svg>';
 const O_SVG='<svg viewBox="0 0 100 100"><circle class="mark mo" cx="50" cy="50" r="29"/></svg>';
 const svgOf=v=>v==='X'?X_SVG:v==='O'?O_SVG:'';
+let fxTimers=[];
+function clearFx(){
+  fxTimers.forEach(clearTimeout);fxTimers=[];
+  document.querySelectorAll('.cell.wgX,.cell.wgO').forEach(el=>el.classList.remove('wgX','wgO'));
+  document.querySelectorAll('.box.opnX,.box.opnO').forEach(el=>el.classList.remove('opnX','opnO'));
+}
 function render(){
+  clearFx();
   const moves=legal(G),ok=new Set(moves.map(m=>m[0]+'-'+m[1]));
   const liveBoxes=new Set(moves.map(m=>m[0]));
   const over=!!G.winner;
@@ -236,6 +263,22 @@ function render(){
     });
     G.lastChainCaps=null;
   }
+  if(G.lastChainGlow&&G.lastChainGlow.length){
+    G.lastChainGlow.forEach(m=>{
+      m[1].forEach(i=>{
+        const el=document.querySelector('.cell[data-b="'+m[0]+'"][data-i="'+i+'"]');
+        if(el){el.classList.add('wg'+m[3]);el.style.animationDelay=m[2]+'ms';fxTimers.push(setTimeout(()=>{el.classList.remove('wg'+m[3]);el.style.animationDelay=''},m[2]+780))}
+      });
+    });
+    G.lastChainGlow=null;
+  }
+  if(G.lastOpps&&G.lastOpps.length){
+    G.lastOpps.forEach(m=>{
+      const el=document.querySelector('.box[data-b="'+m[0]+'"]');
+      if(el){el.classList.add('opn'+m[1]);el.style.animationDelay=m[2]+'ms';fxTimers.push(setTimeout(()=>{el.classList.remove('opn'+m[1]);el.style.animationDelay=''},m[2]+1900))}
+    });
+    G.lastOpps=null;
+  }
   const chip=$('#chip');chip.textContent=over?(G.winner==='D'?'Draw':G.winner+' wins'):(cfg.mode==='cpu'&&G.turn==='O'?'CPU thinking…':G.turn+' to move');chip.className='chip '+(G.winner&&G.winner!=='D'?G.winner:G.turn);
   const free=G.target<0||boxDone(G,G.target);
   $('#hint').textContent=over?'':G.target<0?'Play anywhere':free?'Target box is closed. Play any open box.':'Play in the glowing box';
@@ -268,8 +311,13 @@ function badTap(b,i){
 }
 let cpuTimer=0;
 function move(b,i){
+  const beforeOpp=oppMap(G);
   G.hist.push(snapshot());
   play(G,b,i);
+  const afterOpp=oppMap(G);
+  const od=G.lastEchoes&&G.lastEchoes.length?Math.max.apply(null,G.lastEchoes.map(e=>e[2]))+120:0;
+  G.lastOpps=null;
+  for(const b in afterOpp)if(beforeOpp[b]!==afterOpp[b]){(G.lastOpps=G.lastOpps||[]).push([+b,afterOpp[b],od])}
   if(G.winner)record();
   persist();render();
   if(G.winner)setTimeout(showOver,650);
@@ -340,7 +388,7 @@ $('#undo').onclick=()=>{
 build();
 if(saved.game&&saved.game.cells){G=saved.game;G.hist=G.hist||[];if(!G.echo)G.echo=Array.from({length:9},()=>Array(9).fill(0));}else G=fresh();
 render();maybeCpu();
-window.__tttx={get G(){return G},cfg,play:tap,legal:()=>legal(G)};
+window.__tttx={get G(){return G},cfg,play:tap,legal:()=>legal(G),oppMap:()=>oppMap(G)};
 </script>
 </body>
 </html>
