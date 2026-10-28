@@ -103,7 +103,8 @@ function enterRoom(id,asSeat,spec,keepLobby){
     if(v.players){if(v.players.X&&v.players.X.uid===me.uid)seat='X';else if(v.players.O&&v.players.O.uid===me.uid)seat='O'}
     const opp=seat==='X'?v.players&&v.players.O:v.players&&v.players.X;
     $('#obar').style.display='flex';
-    $('#waitbar').style.display=(!spec&&v.status==='waiting')?'flex':'none';
+    const wb=$('#waitbar');wb.style.display=(!spec&&v.status==='waiting')?'flex':'none';
+    if(wb.style.display==='flex'){wb.querySelector('span').textContent='Room ready - send this link, then stay on this page';const wcx=$('#waitcancel');if(wcx)wcx.style.display='none'}
     $('#leave').textContent=spec?'Leave':(v.host===me.uid?'Close room':'Leave game');
     $('#onick').textContent=spectate?'Spectating':(opp&&opp.nick?('vs '+opp.nick):'Waiting for opponent…');
     if(v.score){const s=T().score;s.X=v.score.X||0;s.O=v.score.O||0;s.D=v.score.D||0}
@@ -194,12 +195,18 @@ async function sendInvite(toUid,toNick,btn){
   await set(ir,{from:me.uid,fromNick:myNick,roomId:id,ts:serverTimestamp(),status:'pending'});
   update(ref(db,'rate/'+me.uid),{lastInvite:Date.now()});
   btn.disabled=true;btn.textContent='Sent';
+  $('#lobby').close();
   toast('Invite sent to '+toNick);
+  roomLink=location.origin+location.pathname+'?room='+id;
+  const wb=$('#waitbar');wb.style.display='flex';
+  wb.querySelector('span').textContent='Invited '+toNick+' - waiting for answer (60s)';
+  const wc=$('#waitcancel');if(wc){wc.style.display='';wc.onclick=()=>{update(ir,{status:'cancelled'}).catch(()=>{});remove(ref(db,'rooms/'+id)).catch(()=>{});if(sentInvite){sentInvite();sentInvite=null}wb.style.display='none';wc.style.display='none';btn.disabled=false;btn.textContent='Invite';toast('Invite cancelled')}}
+  const clearWait=()=>{wb.style.display='none';if(wc)wc.style.display='none'};
   if(sentInvite)sentInvite();
   sentInvite=onValue(ir,snap=>{
     const v=snap.val();if(!v)return;
-    if(v.status==='accepted'){sentInvite();sentInvite=null;enterRoom(id,'X',false)}
-    else if(v.status==='declined'||v.status==='expired'){sentInvite();sentInvite=null;toast(toNick+(v.status==='declined'?' declined':' did not answer'));remove(ref(db,'rooms/'+id)).catch(()=>{})}
+    if(v.status==='accepted'){sentInvite();sentInvite=null;clearWait();toast(toNick+' joined - game on!');enterRoom(id,'X',false)}
+    else if(v.status==='declined'||v.status==='expired'){sentInvite();sentInvite=null;clearWait();toast(toNick+(v.status==='declined'?' declined':' did not answer'));remove(ref(db,'rooms/'+id)).catch(()=>{})}
   });
   setTimeout(()=>{get(ir).then(s=>{const v=s.val();if(v&&v.status==='pending'){update(ir,{status:'expired'});remove(ref(db,'rooms/'+id)).catch(()=>{})}})},65000);
 }
@@ -216,6 +223,7 @@ function invitesOn(){
         if(!rv||rv.status!=='waiting'||(rv.players&&rv.players.O)){update(ir,{status:'expired'});toast('That invite expired');return}
         await update(rr,{'players/O':{uid:me.uid,nick:myNick},status:'playing'});
         await update(ir,{status:'accepted'});
+        toast('Game started - you are O');
         enterRoom(iv.roomId,'O',false);
       },(silent)=>{update(ir,{status:silent?'expired':'declined'}).catch(()=>{})});
       break; // one toast at a time
