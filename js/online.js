@@ -9,6 +9,7 @@ const ANI=['Fox','Owl','Bear','Wolf','Lynx','Hawk','Deer','Frog','Crow','Seal','
 const nick=()=>ADJ[Math.random()*ADJ.length|0]+ANI[Math.random()*ANI.length|0]+(10+Math.random()*90|0);
 const rid=()=>{const a='abcdefghjkmnpqrstuvwxyz23456789';let s='';for(let i=0;i<6;i++)s+=a[Math.random()*a.length|0];return s};
 
+let tOff=0;
 let me=null, myNick=localStorage.getItem('tttx-nick')||nick();
 localStorage.setItem('tttx-nick',myNick);
 let room=null, roomId=null, seat=null, spectate=false, seenMC=-1, roomOff=null, inviteOff=null, sentInvite=null;
@@ -41,6 +42,7 @@ function toastAsk(fromNick,accept,decline){
 let plistOn=false;
 async function presenceOn(){
   me=await ready;
+  onValue(ref(db,'.info/serverTimeOffset'),s=>{tOff=s.val()||0});
   const p=ref(db,'presence/'+me.uid);
   const hide=localStorage.getItem('tttx-hide')==='1';
   const beat=()=>set(p,{nick:myNick,ts:serverTimestamp(),hide,room:roomId||null});
@@ -48,8 +50,8 @@ async function presenceOn(){
   clearInterval(hb);hb=setInterval(beat,25000);
   if(plistOn)return;plistOn=true;
   onValue(ref(db,'presence'),snap=>{
-    const v=snap.val()||{},now=Date.now();
-    const list=Object.entries(v).filter(([u,p])=>u!==me.uid&&p&&!p.hide&&p.ts&&now-p.ts<70000);
+    const v=snap.val()||{},now=Date.now()+tOff;
+    const list=Object.entries(v).filter(([u,p])=>u!==me.uid&&p&&!p.hide&&p.ts&&now-p.ts<90000);
     $('#pcount').textContent=list.length;
     const el=$('#plist');el.innerHTML='';
     if(!list.length){el.innerHTML='<p class="dim">Nobody else here yet. Share an invite link!</p>';return}
@@ -85,12 +87,20 @@ function enterRoom(id,asSeat,spec,keepLobby){
   if(roomOff)roomOff();
   roomOff=onValue(r,snap=>{
     const v=snap.val();
-    if(!v){if(room){toast('Room closed');leaveRoom()}return}
+    if(!v){
+      if(room){
+        const hadOpp=room.players&&room.players.X&&room.players.O;
+        cleanupRoom();
+        toast(hadOpp?'Opponent left - back to local play':'Room closed');
+      }
+      return
+    }
     room=v;
     if(v.players){if(v.players.X&&v.players.X.uid===me.uid)seat='X';else if(v.players.O&&v.players.O.uid===me.uid)seat='O'}
     const opp=seat==='X'?v.players&&v.players.O:v.players&&v.players.X;
     $('#obar').style.display='flex';
     $('#waitbar').style.display=(!spec&&v.status==='waiting')?'flex':'none';
+    $('#leave').textContent=spec?'Leave':(v.host===me.uid?'Close room':'Leave game');
     $('#onick').textContent=spectate?'Spectating':(opp&&opp.nick?('vs '+opp.nick):'Waiting for opponent…');
     if(v.score){const s=T().score;s.X=v.score.X||0;s.O=v.score.O||0;s.D=v.score.D||0}
     if(v.state&&typeof v.moveCount==='number'&&v.moveCount!==seenMC){
@@ -115,14 +125,19 @@ function enterRoom(id,asSeat,spec,keepLobby){
   // opponent presence watch
   if(!spec&&inviteOff===null){/* presence of opponent handled via nick line */ }
 }
-function leaveRoom(){
+function cleanupRoom(){
   if(roomOff){roomOff();roomOff=null}
-  if(room&&room.status==='waiting'&&room.host===me.uid)remove(ref(db,'rooms/'+roomId)).catch(()=>{});
-  set(ref(db,'presence/'+me.uid+'/room'),null).catch(()=>{});
-  room=null;roomId=null;seat=null;spectate=false;seenMC=-1;
+  room=null;roomId=null;seat=null;spectate=false;seenMC=-1;roomLink='';
   $('#obar').style.display='none';
-  $('#waitbar').style.display='none';roomLink='';
+  $('#waitbar').style.display='none';
+  if(me)set(ref(db,'presence/'+me.uid+'/room'),null).catch(()=>{});
   T().localNew();
+}
+function leaveRoom(){
+  const r=room,id=roomId;
+  const iPlay=r&&id&&!spectate&&r.players&&((r.players.X&&r.players.X.uid===me.uid)||(r.players.O&&r.players.O.uid===me.uid));
+  cleanupRoom();
+  if(iPlay)remove(ref(db,'rooms/'+id)).catch(()=>{});
 }
 Online.leave=leaveRoom;
 
@@ -248,14 +263,20 @@ async function boot(){
   $('#waitcopy').onclick=()=>copyText(roomLink||$('#rlink').value,$('#waitcopy'));
   if(navigator.share){$('#sharelink').style.display='';$('#waitshare').style.display=''}
   $('#sharelink').onclick=shareLink;$('#waitshare').onclick=shareLink;
-  $('#leave').onclick=leaveRoom;
+  $('#leave').onclick=()=>{
+    if(room&&!spectate&&room.status==='playing'){
+      const host=room.host===me.uid;
+      if(!confirm(host?'Close the room and end the game for both players?':'Leave and end the game for both players?'))return;
+    }
+    leaveRoom();
+  };
   // join via ?room=
   const q=new URLSearchParams(location.search),join=q.get('room');
   if(join){
     me=await ready;await presenceOn();
     const rr=ref(db,'rooms/'+join);
     const rv=(await get(rr)).val();
-    if(!rv){toast('Room not found');return}
+    if(!rv){toast('That room is closed');return}
     if(rv.players&&rv.players.X&&rv.players.X.uid===me.uid)enterRoom(join,'X',false);
     else if(rv.players&&rv.players.O&&rv.players.O.uid===me.uid)enterRoom(join,'O',false);
     else if(rv.players&&!rv.players.O&&rv.status==='waiting'){await update(rr,{'players/O':{uid:me.uid,nick:myNick},status:'playing'});enterRoom(join,'O',false)}
