@@ -292,7 +292,7 @@ footer a:hover{opacity:.7}
   <span class="turn" id="chip">X to move</span>
 </div>
 <main><div id="big"></div></main>
-<div class="pillrow"><button id="playbtn" class="acc">Play online</button><button id="new">New game</button><button id="howbtn">How it works</button></div>
+<div class="pillrow"><button id="share2" class="solid" style="display:none">Share result</button><button id="playbtn" class="acc">Play online</button><button id="new">New game</button><button id="howbtn">How it works</button></div>
 <div id="hintrow"><span id="hint"></span><span id="score"></span></div><div id="capline"><span></span></div>
 
 <dialog id="dlg" class="wide">
@@ -514,6 +514,7 @@ function render(){
   const over=!!G.winner;
   // while a capture cascade is still playing, next-turn cues stay hidden; a timer reveals them at the end
   const cascMs=(G.lastChainCaps&&G.lastChainCaps.length)?Math.max.apply(null,G.lastChainCaps.map(m=>m[1]))+pace().popDur+150:0;
+  if(cascMs>0)G._cascEnd=Math.max(G._cascEnd||0,cascMs-150); // remote/echo cascades: make the end time available to overDelay()
   if(cascMs>0){cascadeUntil=Date.now()+cascMs;clearTimeout(cascTimer);cascTimer=setTimeout(()=>{cascadeUntil=0;render()},cascMs+30)}
   const cascading=Date.now()<cascadeUntil;
   const pendCaps=new Set((G.lastChainCaps||[]).map(m=>m[0])); // boxes whose capture flip is still scheduled: no early blank/border
@@ -626,7 +627,7 @@ function render(){
   if(cascading){chip.innerHTML=mkIco(mover)+' captures…';chip.className='turn '+mover}
   else{chip.innerHTML=over?(G.winner==='D'?(G.autoDraw?'Draw - no line left':'Draw'):mkIco(G.winner)+' wins'):(cfg.mode==='cpu'&&G.turn==='O'?'CPU thinking…':mkIco(G.turn)+' to move');chip.className='turn '+(G.winner?(G.winner==='D'?'D':G.winner):G.turn)}
   const free=G.target<0||boxDone(G,G.target);
-  $('#hint').textContent=over||cascading?'':G.target<0?'Play anywhere':free?'Target box is closed. Play any open box.':'Play in the glowing box';
+  $('#share2').style.display=over&&!cascading?'':'none';$('#hint').textContent=over||cascading?'':G.target<0?'Play anywhere':free?'Target box is closed. Play any open box.':'Play in the glowing box';
   $('#scX').textContent=score.X;$('#scO').textContent=score.O;
   $('#score').textContent=score.D?('draws '+score.D):'';
   let nm=cfg.mode==='cpu'?{X:'You',O:'CPU'}:{X:cfg.names.X||'Player X',O:cfg.names.O||'Player O'};
@@ -694,7 +695,7 @@ function move(b,i){
   if(G.winner)record();
   if(window.Online&&Online.onLocalMove)Online.onLocalMove();
   persist();render();
-  if(G.winner)setTimeout(showOver,650+(G._cascEnd||0));
+  if(G.winner)setTimeout(showOver,overDelay());
   else maybeCpu();
 }
 function record(){score[G.winner]++}
@@ -730,6 +731,8 @@ function cpuPick(g){
   }
   return pick;
 }
+// end-of-game pacing: the dialog waits until the win line (200ms delay + 750ms draw, starting after the cascade settles) has fully drawn, plus a beat
+function overDelay(){const ce=G._cascEnd||0;return G.winner&&G.winner!=='D'?ce+1400:650+ce}
 function showOver(){
   if(!G.winner)return;
   const w=G.winner;
@@ -790,9 +793,10 @@ $('#redo').onclick=()=>{
   const states=[];for(let i=e.popped.length-1;i>=0;i--)states.push(e.popped[i]);states.push(e.cur);
   let s;for(let i=0;i<states.length-1;i++){G.hist.push(states[i]);s=states[i+1]}
   const h=G.hist,r=G.redo;G=Object.assign(JSON.parse(s),{hist:h,redo:r});
-  if(G.winner){score[G.winner]++;setTimeout(showOver,650)}
+  if(G.winner){score[G.winner]++;setTimeout(showOver,overDelay())}
   persist();render();maybeCpu();
 };
+$('#share2').onclick=()=>shareResult();
 $('#chip').onclick=()=>{if(G.winner)showOver()};
 build();
 if(saved.game&&saved.game.cells){G=saved.game;G.hist=G.hist||[];G.redo=[];G.maxChain=G.maxChain||0;if(!G.echo)G.echo=Array.from({length:9},()=>Array(9).fill(0));}else G=fresh();
@@ -947,10 +951,9 @@ function editName(which){
 }
 $('#nmX').onclick=()=>editName('X');
 $('#nmO').onclick=()=>editName('O');
-window.__tttx={get G(){return G},setOnlineRule(r){onlineRule=r||null},effRule:()=>effRule(),effRule:()=>effRule(),deadGame:()=>deadGame(G),mkIco,setG(o){G=o},cfg,score,play:tap,move,badTap,warn,legal:()=>legal(G),oppMap:()=>oppMap(G),pace,render,persist,fresh:()=>{newGame()},localNew:newGame,showOver,cardData,makeCardBlob,shareResult};
+window.__tttx={get G(){return G},setOnlineRule(r){onlineRule=r||null},effRule:()=>effRule(),effRule:()=>effRule(),deadGame:()=>deadGame(G),mkIco,setG(o){G=o},cfg,score,play:tap,move,badTap,warn,legal:()=>legal(G),oppMap:()=>oppMap(G),pace,render,persist,fresh:()=>{newGame()},localNew:newGame,showOver,overDelay,cardData,makeCardBlob,shareResult};
 </script>
 <script type="module" src="/online.js"></script>
 </body>
 </html>
-
 
