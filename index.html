@@ -1050,14 +1050,16 @@ window.__tttx={get G(){return G},setOnlineRule(r){onlineRule=r||null},effRule:()
 </script>
 <script type="module" src="/online.js"></script>
 <script>(()=>{
- let revealed=false,lastBoard='',eatClickUntil=0;
+ let revealed=false,lastBoard='',eatClickUntil=0,sessionStarted=false;
  const signature=()=>JSON.stringify(window.__tttx?.G?.cells||[]);
  const update=()=>{const g=window.__tttx?.G,sig=signature();if(sig!==lastBoard){revealed=false;lastBoard=sig;}
  const playing=!!g&&!g.winner&&g.cells.some(b=>b.some(Boolean));
+ if(!playing)sessionStarted=false;
  const busy=document.querySelector('dialog[open],#toast:popover-open,#chatpanel:not([hidden]),#waitbar.on');
- document.body.classList.toggle('table-playing',playing);document.body.classList.toggle('game-focus',playing&&!busy&&!revealed);};
+ document.body.classList.toggle('table-playing',playing);document.body.classList.toggle('game-focus',playing&&sessionStarted&&!busy&&!revealed);};
  const reveal=e=>{if(!document.body.classList.contains('game-focus')||e.target.closest('#big'))return;
  revealed=true;eatClickUntil=performance.now()+700;document.body.classList.remove('game-focus');e.preventDefault();e.stopImmediatePropagation();};
+ document.querySelector('#big').addEventListener('click',e=>{if(!e.isTrusted||!e.target.closest('.cell'))return;const before=signature(),legalCell=e.target.closest('.cell.can:not(:disabled)');setTimeout(()=>{if(signature()!==before||legalCell){sessionStarted=true;revealed=false;update()}})},true);
  document.addEventListener('pointerdown',reveal,true);
  document.addEventListener('click',e=>{if(performance.now()<eatClickUntil){eatClickUntil=0;e.preventDefault();e.stopImmediatePropagation();}},true);
  new MutationObserver(update).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','open','hidden']});update();
