@@ -217,6 +217,7 @@ html{scrollbar-width:thin;scrollbar-color:rgba(139,156,255,.35) transparent}
 #winline line.draw{stroke-dasharray:100;stroke-dashoffset:100;animation:drawline .75s ease-out .2s forwards}
 @keyframes drawline{to{stroke-dashoffset:0}}
 @media (prefers-reduced-motion:reduce){
+  #big .box{transition:none}
   #big:not(.free) .box.live.pX,#big:not(.free) .box.live.pO{animation:none}
   .cell.rip::after{content:none;animation:none}
   .cap.W::after{content:none;animation:none}
@@ -235,7 +236,9 @@ html{scrollbar-width:thin;scrollbar-color:rgba(139,156,255,.35) transparent}
   #waitbar button{margin-left:0;flex:1 1 auto;padding:8px 10px}
   .hchip{padding:6px 10px;font-size:12px}
   header{padding:12px 12px 2px}
-  #big{gap:10px;width:min(100%,calc(100svh - 236px))}
+  #big{gap:10px;width:min(100%,calc(100svh - 236px));position:relative}
+  /* focus zoom: boxes are absolutely positioned squares laid out by JS (see render) */
+  #big .box{position:absolute;transition:left .38s cubic-bezier(.25,.9,.25,1),top .38s cubic-bezier(.25,.9,.25,1),width .38s cubic-bezier(.25,.9,.25,1),height .38s cubic-bezier(.25,.9,.25,1)}
   .box{border-radius:16px;padding:8px;gap:5px}
   .cell{border-radius:8px}
   .cap{border-radius:15px}
@@ -481,7 +484,22 @@ function render(){
   const cascMs=(G.lastChainCaps&&G.lastChainCaps.length)?Math.max.apply(null,G.lastChainCaps.map(m=>m[1]))+pace().popDur+150:0;
   if(cascMs>0){cascadeUntil=Date.now()+cascMs;clearTimeout(cascTimer);cascTimer=setTimeout(()=>{cascadeUntil=0;render()},cascMs+30)}
   const cascading=Date.now()<cascadeUntil;
-  bigEl.classList.toggle('free',!over&&!cascading&&(G.target<0||boxDone(G,G.target)));
+  bigEl.classList.toggle('free',!over&&(G.target<0||boxDone(G,G.target)));
+  // focus zoom mosaic (mobile only): target track grows 1.7x, every box stays a centered square in its track
+  const foc=!over&&!cascading&&G.target>=0&&!boxDone(G,G.target)?G.target:-1;
+  const fr=foc>=0?foc/3|0:-1,fc=foc>=0?foc%3:-1;
+  const mob=matchMedia('(max-width:640px)').matches;
+  document.querySelectorAll('.box').forEach(box=>{
+    if(!mob){box.style.width=box.style.height=box.style.left=box.style.top='';return}
+    const B=bigEl.clientWidth,g=10,b=+box.dataset.b,r=b/3|0,c=b%3;
+    const s=foc>=0?(B-2*g)/3.7:(B-2*g)/3,F=foc>=0?1.7*s:s;
+    const T=k=>k===fc?F:s,R=k=>k===fr?F:s;
+    const X=[0,T(0)+g,T(0)+T(1)+2*g],Y=[0,R(0)+g,R(0)+R(1)+2*g];
+    const sq=Math.min(T(c),R(r));
+    box.style.width=sq+'px';box.style.height=sq+'px';
+    box.style.left=X[c]+(T(c)-sq)/2+'px';
+    box.style.top=Y[r]+(R(r)-sq)/2+'px';
+  });
   document.querySelectorAll('.box').forEach(box=>{
     const b=+box.dataset.b;
     box.className='box'+(!over&&!cascading&&liveBoxes.has(b)?' live p'+G.turn:'')+(!over&&!cascading&&!liveBoxes.has(b)&&!G.owner[b]?' dim':'');
@@ -743,6 +761,7 @@ $('#chip').onclick=()=>{if(G.winner)showOver()};
 build();
 if(saved.game&&saved.game.cells){G=saved.game;G.hist=G.hist||[];G.redo=[];G.maxChain=G.maxChain||0;if(!G.echo)G.echo=Array.from({length:9},()=>Array(9).fill(0));}else G=fresh();
 syncSeg();render();maybeCpu();
+addEventListener('resize',()=>render());
 
 // --- share result card (canvas -> PNG, Web Share API with download+copy fallback) ---
 const SHARE_URL='https://tttx.miraliyev.tech/';
