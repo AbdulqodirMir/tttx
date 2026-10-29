@@ -8,6 +8,15 @@
 <meta name="description" content="Every move sends your opponent to a new box. Captures echo across the board. Tic Tac Toe, extended.">
 <meta property="og:title" content="TicTacToe Extended">
 <meta property="og:description" content="Every move sends your opponent to a new box. Captures echo across the board.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://tttx.miraliyev.tech/">
+<meta property="og:image" content="https://tttx.miraliyev.tech/og-cover.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="TicTacToe Extended">
+<meta name="twitter:description" content="Every move sends your opponent to a new box. Captures echo across the board.">
+<meta name="twitter:image" content="https://tttx.miraliyev.tech/og-cover.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2305060f'/%3E%3Cpath d='M16 16l16 16M32 16L16 32' stroke='%238b9cff' stroke-width='5' stroke-linecap='round'/%3E%3Ccircle cx='44' cy='44' r='9' fill='none' stroke='%23ff5d8f' stroke-width='5'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
@@ -705,7 +714,7 @@ async function makeCardBlob(){
     c.fillStyle=TX;c.textAlign='center';c.textBaseline='middle';c.fillText(t,W/2,cy+2);c.textAlign='left';c.textBaseline='alphabetic';
   }
   row(1320,[{t:'tttx.miraliyev.tech',f:'400 32px '+SAN,c:DIM}]);
-  return new Promise(res=>cv.toBlob(b=>res(b),'image/png'));
+  return new Promise(res=>cv.toBlob(b=>res(b),'image/jpeg',0.92));
 }
 let sharing=false;
 async function shareResult(){
@@ -715,12 +724,12 @@ async function shareResult(){
     const blob=await makeCardBlob();
     const d=cardData();
     const txt=(d.w==='D'?'Draw':d.nm[d.w]+' wins')+' \u00b7 TicTacToe Extended '+SHARE_URL;
-    const file=new File([blob],'tttx-result.png',{type:'image/png'});
+    const file=new File([blob],'tttx-result.jpg',{type:'image/jpeg'});
     if(navigator.canShare&&navigator.canShare({files:[file]})){
       try{await navigator.share({files:[file],title:'TicTacToe Extended',text:txt});btn.disabled=false;sharing=false;return}
       catch(e){if(e&&e.name==='AbortError'){btn.disabled=false;sharing=false;return}}
     }
-    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='tttx-result.png';document.body.appendChild(a);a.click();a.remove();
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='tttx-result.jpg';document.body.appendChild(a);a.click();a.remove();
     setTimeout(()=>URL.revokeObjectURL(a.href),4000);
     copyTxt(SHARE_URL);
     sToast('Card saved \u00b7 link copied');
