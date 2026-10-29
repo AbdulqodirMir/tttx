@@ -331,6 +331,49 @@ footer a:hover{opacity:.7}
  #obar{position:fixed;bottom:4px;left:14px;width:auto;max-width:calc(50vw - var(--board)/2 - 30px);flex-wrap:wrap}
 }
 
+/* One radius family. Nested corners are inset from their parent. */
+:root{--r-pill:999px;--r-panel:32px;--r-inset:20px;--r1:12px;--r2:24px;--edge:1px}
+button,.backpill,.turn,#capline span,#rlink{border-radius:var(--r-pill);border-width:var(--edge)}
+.box{border-width:var(--edge);border-radius:var(--r2)}
+.cell{border-radius:var(--r1);border:0}
+.cap{border-radius:calc(var(--r2) - 1px)}
+dialog{border-radius:var(--r-panel);border-width:var(--edge)}
+.step,.pitem{border-radius:var(--r-inset);border-width:var(--edge)}
+#waitbar{padding:10px;border-radius:34px;border-width:var(--edge)}
+#waitbar>span{padding:0 10px}
+#waitbar button{border-radius:var(--r-pill)}
+.seg{border-radius:var(--r-pill);padding:3px;gap:3px;border-width:var(--edge)}
+.seg button{border-radius:var(--r-pill);border:0}
+input:focus-visible,button:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid rgba(139,156,255,.65);outline-offset:-3px}
+label.chk input{border-width:var(--edge);border-radius:6px}
+@media(max-width:640px){:root{--r1:10px;--r2:19px}.box{border-radius:var(--r2)}.cell{border-radius:var(--r1)}.cap{border-radius:calc(var(--r2) - 1px)}}
+dialog{max-height:calc(100svh - 32px);overflow-y:auto}
+button:hover{border-color:rgba(245,243,238,.3)}
+button:active:not(:disabled){transform:scale(.98)}
+@media(prefers-reduced-motion:reduce){button:active:not(:disabled){transform:none}}
+/* 44px control: 22px cap + 10px inset + 1px panel border. */
+#waitbar{border-radius:33px}
+button:hover:not(:disabled){background-color:rgba(255,255,255,.1)}
+#reshuffle{min-height:32px;padding:4px 10px!important;border-radius:999px}
+
+.nickrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.nickrow #reshuffle{min-height:44px;font-size:11px;margin-left:auto}
+#lobby h2:focus{outline:none}
+
+@media(min-width:641px) and (max-width:1100px){
+ body{--top:150px}
+ header{row-gap:8px}
+ .hchips{flex-basis:100%;justify-content:flex-end}
+ #status .turn{top:116px}
+}
+/* Gameplay focus keeps board light and interaction unchanged. */
+header,#status,.pillrow,#hintrow,#obar,.blob,.aurora,.stars{transition:opacity .55s cubic-bezier(.2,.8,.2,1)}
+body.game-focus header{opacity:.62}
+body.game-focus #status,body.game-focus .pillrow,body.game-focus #hintrow,body.game-focus #obar{opacity:.65}
+body.game-focus .blob,body.game-focus .stars{opacity:.12}
+body.game-focus .aurora{opacity:.3}
+body.game-focus header:focus-within,body.game-focus .pillrow:focus-within{opacity:1}
+@media(prefers-reduced-motion:reduce){header,#status,.pillrow,#hintrow,#obar,.blob,.aurora,.stars{transition:none}}
+body.table-playing #big .box,body.table-playing #big .box.dim{opacity:1!important}body.table-playing #big .cell:empty{background:rgba(245,243,238,.15)}
 </style>
 </head>
 <body>
@@ -380,8 +423,8 @@ footer a:hover{opacity:.7}
 <div id="toast" popover="manual"></div>
 
 <dialog id="lobby">
-  <h2>Play <em>online</em></h2>
-  <p class="dim" style="margin:0">You are <b id="mynick"></b> <button id="reshuffle" style="padding:3px 9px;font-size:11px">↻</button> <span class="edit">tap name to edit</span></p>
+  <h2 tabindex="-1" autofocus>Play <em>online</em></h2>
+  <div class="nickrow"><span class="dim">You are <b id="mynick"></b></span><button id="reshuffle" title="Generate a random player name" aria-label="Generate a random player name">Random name</button></div><p class="dim edit" style="margin:4px 0 0;font-size:11px">Tap your name to edit it</p>
   <label class="t">Play a friend</label>
   <div class="row" style="margin-top:0"><button id="mkroom" class="solid" style="flex:1">Create invite link</button></div>
   <div id="rlinkrow"><input id="rlink" readonly><button id="copylink">Copy</button><button id="sharelink" style="display:none">Share</button></div>
@@ -1006,5 +1049,17 @@ $('#nmO').onclick=()=>editName('O');
 window.__tttx={get G(){return G},setOnlineRule(r){onlineRule=r||null},effRule:()=>effRule(),effRule:()=>effRule(),deadGame:()=>deadGame(G),mkIco,setG(o){G=o},cfg,score,play:tap,move,badTap,warn,legal:()=>legal(G),oppMap:()=>oppMap(G),pace,render,persist,fresh:()=>{newGame()},localNew:newGame,showOver,overDelay,cardData,makeCardBlob,shareResult};
 </script>
 <script type="module" src="/online.js"></script>
-</body>
-</html>
+<script>(()=>{
+ let revealed=false,lastBoard='',eatClickUntil=0;
+ const signature=()=>JSON.stringify(window.__tttx?.G?.cells||[]);
+ const update=()=>{const g=window.__tttx?.G,sig=signature();if(sig!==lastBoard){revealed=false;lastBoard=sig;}
+ const playing=!!g&&!g.winner&&g.cells.some(b=>b.some(Boolean));
+ const busy=document.querySelector('dialog[open],#toast:popover-open,#chatpanel:not([hidden]),#waitbar.on');
+ document.body.classList.toggle('table-playing',playing);document.body.classList.toggle('game-focus',playing&&!busy&&!revealed);};
+ const reveal=e=>{if(!document.body.classList.contains('game-focus')||e.target.closest('#big'))return;
+ revealed=true;eatClickUntil=performance.now()+700;document.body.classList.remove('game-focus');e.preventDefault();e.stopImmediatePropagation();};
+ document.addEventListener('pointerdown',reveal,true);
+ document.addEventListener('click',e=>{if(performance.now()<eatClickUntil){eatClickUntil=0;e.preventDefault();e.stopImmediatePropagation();}},true);
+ new MutationObserver(update).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','open','hidden']});update();
+})();
+</script></body></html>
