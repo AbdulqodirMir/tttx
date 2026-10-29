@@ -1,6 +1,7 @@
 // TTTX online: rooms + invite links, presence list + gentle invites, rematch, spectate.
+// v3.2 sync hardening: transactional moves/joins/rematch, reconnect resync, opponent liveness, pinned ruleset.
 import {db,ready} from './js/fb.js';
-import {ref,get,set,update,remove,push,onValue,onDisconnect,serverTimestamp,increment} from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
+import {ref,get,set,update,remove,push,onValue,onDisconnect,serverTimestamp,runTransaction} from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
 
 const $=s=>document.querySelector(s);
 const T=()=>window.__tttx;
@@ -10,12 +11,14 @@ const nick=()=>ADJ[Math.random()*ADJ.length|0]+ANI[Math.random()*ANI.length|0]+(
 const rid=()=>{const a='abcdefghjkmnpqrstuvwxyz23456789';let s='';for(let i=0;i<6;i++)s+=a[Math.random()*a.length|0];return s};
 
 let tOff=0;
+const nowSrv=()=>Date.now()+tOff;
 let me=null, myNick=localStorage.getItem('tttx-nick')||nick();
 localStorage.setItem('tttx-nick',myNick);
-let room=null, roomId=null, seat=null, spectate=false, seenMC=-1, roomOff=null, inviteOff=null, sentInvite=null;
-let hb=0;
+let room=null, roomId=null, seat=null, spectate=false, seenMC=-1, seenGameId=null, roomOff=null, sentInvite=null;
+let hb=0, goneOff=null, goneRef=null, oppPresOff=null, oppGoneTimer=0, oppGoneUid=null, oppGone=false;
+const GONE_GRACE=()=>+(localStorage.getItem('tttx-gone-grace')||45000);
 
-const Online={active:()=>!!room, seat:()=>seat, spectating:()=>spectate};
+const Online={active:()=>!!roomId, seat:()=>seat, spectating:()=>spectate};
 window.Online=Online;
 
 let roomLink='';
@@ -50,9 +53,10 @@ async function presenceOn(){
   const beat=()=>set(p,{nick:myNick,ts:serverTimestamp(),hide,room:roomId||null});
   beat();onDisconnect(p).remove();
   clearInterval(hb);hb=setInterval(beat,25000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)beat()});
   if(plistOn)return;plistOn=true;
   onValue(ref(db,'presence'),snap=>{
-    const v=snap.val()||{},now=Date.now()+tOff;
+    const v=snap.val()||{},now=nowSrv();
     const list=Object.entries(v).filter(([u,p])=>u!==me.uid&&p&&!p.hide&&p.ts&&now-p.ts<90000);
     $('#pcount').textContent=list.length;
     const ob=$('#online');if(ob)ob.innerHTML='<span class="dot"></span>'+(list.length+1)+' online';
@@ -79,19 +83,114 @@ async function createRoom(){
   for(let tries=0;tries<5;tries++){
     const id=rid(),r=ref(db,'rooms/'+id);
     if((await get(r)).exists())continue;
-    await set(r,{createdAt:serverTimestamp(),status:'waiting',host:me.uid,players:{X:{uid:me.uid,nick:myNick},O:null},state:freshState(),anim:null,moveCount:0,score:{X:0,O:0,D:0}});
+    // pin the host's ruleset so both sides adjudicate identically
+    await set(r,{createdAt:serverTimestamp(),status:'waiting',host:me.uid,cfg:{rule:(T().cfg&&T().cfg.rule)||'line'},gameId:1,players:{X:{uid:me.uid,nick:myNick},O:null},state:freshState(),anim:null,moveCount:0,score:{X:0,O:0,D:0}});
     update(ref(db,'rate/'+me.uid),{lastRoom:Date.now()});
     return id;
   }
   toast('Could not create a room, try again');return null;
 }
+// Atomically claim the O seat. Returns true only if THIS client seated itself.
+async function claimSeatO(id){
+  const r=ref(db,'rooms/'+id);
+  // RTDB transactions need a locally cached value, and the cache is dropped when the last
+  // listener detaches - so hold a one-shot listener attached across the transaction.
+  let off=null;
+  await new Promise(res=>{off=onValue(r,()=>res());setTimeout(res,4000)});
+  try{
+    const res=await runTransaction(r,cur=>{
+      if(!cur)return;                       // room gone
+      if(cur.status!=='waiting')return;      // already started
+      if(cur.players&&cur.players.O)return;  // seat taken
+      cur.players=cur.players||{};
+      cur.players.O={uid:me.uid,nick:myNick};
+      cur.status='playing';
+      return cur;
+    });
+    return !!(res&&res.committed);
+  }catch(e){return false}
+  finally{if(off)off()}
+}
+function applyServerState(v,fresh){
+  seenMC=v.moveCount||0;
+  const h=T().G.hist;
+  T().setG(Object.assign(JSON.parse(JSON.stringify(v.state)),{hist:fresh?[]:h}));
+  const a=v.anim;
+  if(a&&v.lastMoveBy!==me.uid){const g=T().G;g.lastEchoes=a.echoes||null;g.lastChainCaps=a.caps||null;g.lastChainGlow=a.glow||null;g.lastOpps=a.opps||null}
+  T().render();
+  if(v.state.winner)setTimeout(()=>T().showOver(),650);
+  else if($('#over').open)$('#over').close();
+}
+// Force the local board to the server truth (reconnect, failed/aborted move).
+async function resyncFromServer(reason){
+  const id=roomId;if(!id)return;
+  try{
+    const v=(await get(ref(db,'rooms/'+id))).val();
+    if(roomId!==id||!v||!v.state)return; // listener handles a deleted room
+    room=v;
+    seenGameId=v.gameId||1;
+    applyServerState(v,false);
+    if(reason==='move')toast('Move did not go through - board resynced');
+    else if(reason==='reconnect')toast('Reconnected - board resynced');
+  }catch(e){/* offline still; listener will fire on reconnect */}
+}
+function stopOppWatch(){
+  if(oppPresOff){oppPresOff();oppPresOff=null}
+  clearTimeout(oppGoneTimer);oppGoneTimer=0;oppGoneUid=null;oppGone=false;
+}
+function oppLeftCleanup(id,oppNick){
+  stopOppWatch();
+  if(roomId!==id)return;
+  remove(ref(db,'rooms/'+id)).catch(()=>{});
+  // the room listener fires with null and does the UI cleanup + toast
+}
+function handleOppGone(v,id){
+  if(spectate||!v.players||!seat)return;
+  const oppSeat=seat==='X'?'O':'X';
+  const opp=v.players[oppSeat];
+  if(!opp||!opp.uid||opp.declined||v.status!=='playing'){ // nobody to watch (yet)
+    stopOppWatch();return;
+  }
+  const goneMarker=!!opp.gone;
+  if(oppGoneUid!==opp.uid){
+    stopOppWatch();oppGoneUid=opp.uid;
+    // fallback signal: presence heartbeat staleness (covers clients without the gone marker)
+    oppPresOff=onValue(ref(db,'presence/'+opp.uid),ps=>{
+      const pv=ps.val();
+      const stale=!pv||!pv.ts||(nowSrv()-pv.ts>90000);
+      onOppGoneState(stale||goneMarker,id,opp);
+    });
+  }
+  onOppGoneState(goneMarker,id,opp);
+}
+function onOppGoneState(gone,id,opp){
+  if(roomId!==id)return;
+  const name=(opp&&opp.nick)||'Opponent';
+  if(gone&&!oppGone){
+    oppGone=true;
+    $('#onick').textContent='vs '+name+' - reconnecting…';
+    clearTimeout(oppGoneTimer);
+    oppGoneTimer=setTimeout(()=>{oppGone=false;toast(name+' left - back to local play');oppLeftCleanup(id,name)},GONE_GRACE());
+  }else if(!gone&&oppGone){
+    oppGone=false;
+    clearTimeout(oppGoneTimer);oppGoneTimer=0;
+    $('#onick').textContent='vs '+name;
+    toast(name+' is back');
+  }
+}
 function enterRoom(id,asSeat,spec,keepLobby){
-  roomId=id;seat=asSeat;spectate=spec;seenMC=-1;
+  roomId=id;seat=asSeat;spectate=spec;seenMC=-1;seenGameId=null;
   if(!spec)get(ref(db,'invites/'+me.uid)).then(s=>{const v=s.val()||{};
-    for(const[k,iv]of Object.entries(v)){if(iv&&iv.status==='pending'){update(ref(db,'invites/'+me.uid+'/'+k),{status:'busy'}).catch(()=>{});update(ref(db,'rooms/'+iv.roomId),{'players/O':{uid:me.uid,nick:myNick,declined:true,busy:true}}).catch(()=>{})}}
+    // mark other pending invites busy; never write into the other room itself
+    for(const[k,iv]of Object.entries(v)){if(iv&&iv.status==='pending'){update(ref(db,'invites/'+me.uid+'/'+k),{status:'busy'}).catch(()=>{})}}
   }).catch(()=>{});
   set(ref(db,'presence/'+me.uid+'/room'),id).catch(()=>{});
   if(!keepLobby)$('#lobby').close();
+  if(!spec&&seat){
+    goneRef=ref(db,'rooms/'+id+'/players/'+seat+'/gone');
+    set(goneRef,null).catch(()=>{});
+    onDisconnect(goneRef).set(serverTimestamp());
+  }
   const r=ref(db,'rooms/'+id);
   if(roomOff)roomOff();
   roomOff=onValue(r,snap=>{
@@ -99,8 +198,9 @@ function enterRoom(id,asSeat,spec,keepLobby){
     if(!v){
       if(room){
         const hadOpp=room.players&&room.players.X&&room.players.O;
+        const oppNick=hadOpp?((room.players[seat==='X'?'O':'X']||{}).nick||'Opponent'):'Opponent';
         cleanupRoom();
-        const oppNick=hadOpp?((room.players[seat==='X'?'O':'X']||{}).nick||'Opponent'):'Opponent';toast(hadOpp?oppNick+' left - back to local play':'Room closed');
+        toast(hadOpp?oppNick+' left - back to local play':'Room closed');
       }
       return
     }
@@ -110,34 +210,36 @@ function enterRoom(id,asSeat,spec,keepLobby){
     $('#obar').style.display='flex';
     const wb=$('#waitbar');(!spec&&v.status==='waiting')?wbShow(wb):wbHide(wb);
     if(!spec&&v.status==='waiting'){wb.querySelector('span').textContent='Room ready - send this link, then stay on this page';const wcx=$('#waitcancel');if(wcx)wcx.style.display='none'}
+    if(!spec&&v.status==='playing'){const lb=$('#lobby');if(lb.open)lb.close()}
     $('#leave').textContent=spec?'Leave':(v.host===me.uid?'Close room':'Leave game');
-    $('#onick').textContent=spectate?'Spectating':(opp&&opp.nick?('vs '+opp.nick):'Waiting for opponent…');
+    if(!oppGone)$('#onick').textContent=spectate?'Spectating':(opp&&opp.nick?('vs '+opp.nick):'Waiting for opponent…');
+    T().setOnlineRule(v.cfg&&v.cfg.rule||null);
     if(v.score){const s=T().score;s.X=v.score.X||0;s.O=v.score.O||0;s.D=v.score.D||0}
-    if(v.state&&typeof v.moveCount==='number'&&v.moveCount!==seenMC){
-      const fresh=seenMC===-1;
-      seenMC=v.moveCount;
-      if(true){
-        const h=T().G.hist;
-        T().setG(Object.assign(JSON.parse(JSON.stringify(v.state)),{hist:fresh?[]:h}));
-        const a=v.anim;
-        if(a&&v.lastMoveBy!==me.uid){const g=T().G;g.lastEchoes=a.echoes||null;g.lastChainCaps=a.caps||null;g.lastChainGlow=a.glow||null;g.lastOpps=a.opps||null}
-        T().render();
-        if(v.state.winner)setTimeout(()=>T().showOver(),650);
-        else if($('#over').open)$('#over').close();
-      }
-    }else T().render(); // refresh names/seat/chip/lock even when no move landed
-    // rematch handshake: both flagged -> host resets with swapped seats
-    if(v.rematch&&v.rematch.X&&v.rematch.O&&v.host===me.uid){
-      const px=v.players.X,po=v.players.O;
-      update(r,{players:{X:po,O:px},state:freshState(),anim:null,moveCount:0,rematch:null,status:'playing'});
+    handleOppGone(v,id);
+    // game state: apply only genuinely new snapshots; never rewind past what we already have
+    const gid=v.gameId||1;
+    if(gid!==seenGameId){seenGameId=gid;seenMC=-1;if(v.state)applyServerState(v,true)}
+    else if(v.state&&typeof v.moveCount==='number'&&v.moveCount>seenMC){applyServerState(v,false)}
+    else T().render(); // refresh names/seat/chip/lock even when no move landed
+    // rematch handshake: both flagged -> host resets atomically with swapped seats
+    if(v.rematch&&v.rematch.X&&v.rematch.O&&v.host===me.uid&&!spec){
+      runTransaction(r,cur=>{
+        if(!cur||!cur.rematch||!cur.rematch.X||!cur.rematch.O)return; // abort: flags changed
+        const px=cur.players.X,po=cur.players.O;
+        if(!px||!po)return;
+        cur.players={X:po,O:px};
+        cur.state=freshState();cur.anim=null;cur.moveCount=0;cur.gameId=(cur.gameId||1)+1;cur.rematch=null;cur.status='playing';
+        return cur;
+      }).catch(()=>{});
     }
   });
-  // opponent presence watch
-  if(!spec&&inviteOff===null){/* presence of opponent handled via nick line */ }
 }
 function cleanupRoom(){
   if(roomOff){roomOff();roomOff=null}
-  room=null;roomId=null;seat=null;spectate=false;seenMC=-1;roomLink='';
+  stopOppWatch();
+  if(goneRef){onDisconnect(goneRef).cancel();set(goneRef,null).catch(()=>{});goneRef=null}
+  room=null;roomId=null;seat=null;spectate=false;seenMC=-1;seenGameId=null;roomLink='';
+  T().setOnlineRule(null);
   $('#obar').style.display='none';
   wbHide($('#waitbar'));
   if(me)set(ref(db,'presence/'+me.uid+'/room'),null).catch(()=>{});
@@ -151,7 +253,7 @@ function leaveRoom(){
 }
 Online.leave=leaveRoom;
 Online.names=function(){if(!room)return null;const px=room.players&&room.players.X,po=room.players&&room.players.O;return{X:px&&px.nick||'\u2026',O:po&&po.nick||'\u2026'}};
-Online.waiting=function(){return!!(room&&room.status==='waiting')};
+Online.waiting=function(){if(!roomId)return false;return!room||room.status==='waiting'};
 
 // move hook: called inside move() after play(), before persist/render
 Online.onLocalMove=function(){
@@ -159,21 +261,31 @@ Online.onLocalMove=function(){
   const g=T().G;
   const anim={echoes:g.lastEchoes||null,caps:g.lastChainCaps||null,glow:g.lastChainGlow||null,opps:g.lastOpps||null};
   const st=JSON.parse(JSON.stringify({cells:g.cells,owner:g.owner,turn:g.turn,target:g.target,winner:g.winner,last:g.last,echo:g.echo}));
-  const upd={state:st,anim,moveCount:(room.moveCount||0)+1,lastMoveBy:me.uid,status:'playing'};
-  if(g.winner)upd['score/'+g.winner]=increment(1);
-  seenMC=upd.moveCount;
-  update(ref(db,'rooms/'+roomId),upd).catch(e=>console.warn('move write failed',e));
+  const expected=room.moveCount||0, mySeat=seat, uid=me.uid, id=roomId, won=g.winner;
+  seenMC=expected+1; // optimistic: stale snapshots (moveCount <= this) are ignored until our write echoes
+  runTransaction(ref(db,'rooms/'+id),cur=>{
+    if(!cur)return;                             // abort: room gone
+    if((cur.moveCount||0)!==expected)return;    // abort: state moved on without us
+    if(!cur.state||cur.state.turn!==mySeat)return; // abort: not our turn on the server
+    cur.state=st;cur.anim=anim;cur.moveCount=expected+1;cur.lastMoveBy=uid;cur.status='playing';
+    if(won){cur.score=cur.score||{X:0,O:0,D:0};cur.score[won]=(cur.score[won]||0)+1}
+    return cur;
+  }).then(res=>{
+    if(roomId!==id)return;
+    if(!res.committed){seenMC=expected;resyncFromServer('move')}
+  }).catch(()=>{if(roomId===id){seenMC=expected;resyncFromServer('move')}});
 };
 // tap hook: returns true when the tap was handled online
 Online.tap=function(b,i){
-  if(!room)return false;
+  if(!roomId)return false;
+  if(!room){T().warn('Connecting…');return true}
   if(spectate){T().warn('You are spectating');return true}
   if(room.status==='waiting'){T().warn('Waiting for opponent to join');return true}
   const g=T().G;
   if(g.winner)return true;
   if(g.turn!==seat){T().warn("Opponent's turn");return true}
   if(!T().legal().some(m=>m[0]===b&&m[1]===i)){T().badTap(b,i);return true}
-  T().move(b,i); // local apply; onLocalMove hook ships it
+  T().move(b,i); // local apply; onLocalMove hook ships it transactionally
   return true;
 };
 Online.statusText=function(){
@@ -181,6 +293,7 @@ Online.statusText=function(){
   const g=T().G;
   if(spectate)return{chip:g.winner?(g.winner==='D'?'Draw':(T().mkIco?T().mkIco(g.winner):g.winner)+' wins'):(T().mkIco?T().mkIco(g.turn):g.turn)+' to move',hint:'Spectating'};
   if(room.status==='waiting')return{chip:'Waiting…',hint:'Share the invite link'};
+  if(oppGone)return{chip:'Reconnecting…',hint:'Opponent lost connection'};
   if(g.winner)return null; // default over text
   return{chip:g.turn===seat?'Your move':(room.players[otherSeat()]||{}).nick+' to move',hint:g.turn===seat?'':'Wait for your turn'};
 };
@@ -190,6 +303,20 @@ Online.requestRematch=function(){
   set(ref(db,'rooms/'+roomId+'/rematch/'+seat),true).catch(()=>{});
   toast('Rematch offered');
 };
+
+// ---------- reconnect resync ----------
+let connWired=false;
+function wireReconnect(){
+  if(connWired)return;connWired=true;
+  let wasDown=false;
+  onValue(ref(db,'.info/connected'),s=>{
+    const c=!!s.val();
+    if(c&&wasDown&&roomId)resyncFromServer('reconnect');
+    wasDown=!c;
+  });
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&roomId)resyncFromServer()});
+  window.addEventListener('online',()=>{if(roomId)resyncFromServer('reconnect')});
+}
 
 // ---------- invites ----------
 async function sendInvite(toUid,toNick,btn){
@@ -211,14 +338,19 @@ async function sendInvite(toUid,toNick,btn){
   const clearWait=()=>{clearInterval(cd);wbHide(wb);if(wc)wc.style.display='none'};
   if(sentInvite)sentInvite();
   const rref=ref(db,'rooms/'+id);
-  let presWatch=null;
-  const stopWatch=()=>{if(sentInvite){sentInvite();sentInvite=null}if(presWatch){presWatch();presWatch=null}};
+  let presWatch=null,invWatch=null;
+  const stopWatch=()=>{if(sentInvite){sentInvite();sentInvite=null}if(presWatch){presWatch();presWatch=null}if(invWatch){invWatch();invWatch=null}};
   const rearm=()=>{btn.disabled=false;btn.textContent='Invite'};
   sentInvite=onValue(rref,snap=>{
     const v=snap.val();if(!v)return;
     const o=v.players&&v.players.O;
     if(o&&o.declined){stopWatch();clearWait();rearm();toast(toNick+(o.busy?' is already in a game':' declined'));remove(rref).catch(()=>{});update(ir,{status:o.busy?'busy':'declined'}).catch(()=>{})}
     else if(o&&v.status==='playing'){stopWatch();clearWait();toast(toNick+' joined - game on!');enterRoom(id,'X',false)}
+  });
+  invWatch=onValue(ir,s=>{
+    if(!sentInvite)return;
+    const st=(s.val()||{}).status;
+    if(st==='busy'){stopWatch();clearWait();rearm();toast(toNick+' is already in a game');remove(rref).catch(()=>{})}
   });
   presWatch=onValue(ref(db,'presence/'+toUid),ps=>{
     if(!sentInvite)return; // already resolved
@@ -228,21 +360,31 @@ async function sendInvite(toUid,toNick,btn){
 }
 function invitesOn(){
   onValue(ref(db,'invites/'+me.uid),snap=>{
-    const v=snap.val()||{},now=Date.now();
+    const v=snap.val()||{},now=nowSrv();
     for(const[k,iv]of Object.entries(v)){
       if(!iv||iv.status!=='pending'||!iv.ts||now-iv.ts>60000)continue;
       const ir=ref(db,'invites/'+me.uid+'/'+k);
-      if(room){update(ir,{status:'busy'}).catch(()=>{});update(ref(db,'rooms/'+iv.roomId),{'players/O':{uid:me.uid,nick:myNick,declined:true,busy:true}}).catch(()=>{});continue}
+      if(roomId){update(ir,{status:'busy'}).catch(()=>{});continue}
       if(iv._shown)continue;iv._shown=true;
       toastAsk(iv.fromNick||'Someone',async()=>{
-        const rr=ref(db,'rooms/'+iv.roomId);
-        const rv=(await get(rr)).val();
-        if(!rv||rv.status!=='waiting'||(rv.players&&rv.players.O)){update(ir,{status:'expired'});toast('That invite expired');return}
-        await update(rr,{'players/O':{uid:me.uid,nick:myNick},status:'playing'});
-        await update(ir,{status:'accepted'});
+        const ok=await claimSeatO(iv.roomId);
+        if(!ok){
+          const rv=(await get(ref(db,'rooms/'+iv.roomId))).val();
+          const mine=rv&&rv.players&&((rv.players.O&&rv.players.O.uid===me.uid)||(rv.players.X&&rv.players.X.uid===me.uid));
+          if(!mine){update(ir,{status:'expired'}).catch(()=>{});toast('That invite expired');return}
+        }
+        await update(ir,{status:'accepted'}).catch(()=>{});
         toast('Game started - you are O');
         enterRoom(iv.roomId,'O',false);
-      },(silent)=>{update(ir,{status:silent?'expired':'declined'}).catch(()=>{});if(!silent)update(ref(db,'rooms/'+iv.roomId),{'players/O':{uid:me.uid,nick:myNick,declined:true}}).catch(()=>{})});
+      },(silent)=>{
+        update(ir,{status:silent?'expired':'declined'}).catch(()=>{});
+        if(!silent){
+          // decline marker only while the room is still waiting for an O - never touch a live game
+          get(ref(db,'rooms/'+iv.roomId)).then(s=>{const rv=s.val();
+            if(rv&&rv.status==='waiting'&&!(rv.players&&rv.players.O))update(ref(db,'rooms/'+iv.roomId),{'players/O':{uid:me.uid,nick:myNick,declined:true}}).catch(()=>{});
+          }).catch(()=>{});
+        }
+      });
       break; // one toast at a time
     }
   });
@@ -317,9 +459,17 @@ async function boot(){
     if(!rv){toast('That room is closed');return}
     if(rv.players&&rv.players.X&&rv.players.X.uid===me.uid)enterRoom(join,'X',false);
     else if(rv.players&&rv.players.O&&rv.players.O.uid===me.uid)enterRoom(join,'O',false);
-    else if(rv.players&&!rv.players.O&&rv.status==='waiting'){await update(rr,{'players/O':{uid:me.uid,nick:myNick},status:'playing'});enterRoom(join,'O',false)}
+    else if(rv.players&&!rv.players.O&&rv.status==='waiting'){
+      const ok=await claimSeatO(join);
+      if(ok)enterRoom(join,'O',false);
+      else{
+        const rv2=(await get(rr)).val();
+        if(rv2&&rv2.players&&rv2.players.O&&rv2.players.O.uid===me.uid)enterRoom(join,'O',false);
+        else enterRoom(join,null,true);
+      }
+    }
     else enterRoom(join,null,true);
   }
-  await presenceOn();invitesOn();
+  await presenceOn();invitesOn();wireReconnect();
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
