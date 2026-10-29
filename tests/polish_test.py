@@ -167,6 +167,80 @@ static_tests()
 browser_tests()
 
 # appended: chain choreography tests run inside browser_tests via separate function
+def gating_tests():
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        pg = b.new_context(viewport={'width':390,'height':844}).new_page()
+        pg.goto(BASE); pg.wait_for_selector('#big .cell'); pg.wait_for_timeout(200)
+
+        def craft(pgx, speed):
+            pgx.evaluate(f"""(()=>{{const T=window.__tttx;T.cfg.mode='2p';T.cfg.speed='{speed}';T.localNew();const g=T.G;
+              g.cells[0]=['X','X','','','','','','',''];
+              g.cells[1]=['','X','X','','','','','',''];
+              g.turn='X';g.target=0;T.render()}})()""")
+
+        # normal speed: cues hidden during cascade, revealed after
+        craft(pg,'normal')
+        pg.evaluate("window.__tttx.move(0,2)")
+        pg.wait_for_timeout(60)
+        st = pg.evaluate("""JSON.stringify({
+          live:document.querySelectorAll('.box.live').length,
+          dim:document.querySelectorAll('.box.dim').length,
+          free:document.getElementById('big').className.includes('free'),
+          can:document.querySelectorAll('.cell.can').length,
+          chip:document.getElementById('chip').textContent,
+          hint:document.getElementById('hint').textContent})""")
+        st = json.loads(st)
+        check('gate: no target glow during cascade', st['live']==0 and st['dim']==0 and not st['free'], st)
+        check('gate: no playable-cell highlight during cascade', st['can']==0, st)
+        check('gate: chip announces capture, not next turn', 'captures' in st['chip'], st['chip'])
+        check('gate: hint empty during cascade', st['hint']=='', st['hint'])
+        pg.wait_for_timeout(2600)  # normal chain ends ~2.4s
+        st2 = json.loads(pg.evaluate("""JSON.stringify({
+          liveOrFree:document.querySelectorAll('.box.live').length>0||document.getElementById('big').className.includes('free'),
+          chip:document.getElementById('chip').textContent,
+          hint:document.getElementById('hint').textContent})"""))
+        check('gate: cues revealed after cascade', st2['liveOrFree'] and 'to move' in st2['chip'] and len(st2['hint'])>0, st2)
+
+        # skip-by-tap reveals cues immediately without playing
+        craft(pg,'slow')
+        pg.evaluate("window.__tttx.move(0,2)")
+        pg.wait_for_timeout(100)
+        check('gate: slow still cascading at 1.4s', 'captures' in pg.evaluate("document.getElementById('chip').textContent"))
+        pg.evaluate("window.__tttx.play(4,4)")
+        pg.wait_for_timeout(50)
+        st3 = json.loads(pg.evaluate("""JSON.stringify({
+          liveOrFree:document.querySelectorAll('.box.live').length>0||document.getElementById('big').className.includes('free'),
+          chip:document.getElementById('chip').textContent,
+          turn:window.__tttx.G.turn})"""))
+        check('gate: skip reveals cues instantly, no move played', st3['liveOrFree'] and 'to move' in st3['chip'] and st3['turn']=='O', st3)
+
+        # cascade-to-win: winline and win chip wait for the cascade
+        craft(pg,'normal')
+        pg.evaluate("(()=>{const g=window.__tttx.G;g.owner[2]='X';window.__tttx.render()})()")
+        pg.evaluate("window.__tttx.move(0,2)")
+        pg.wait_for_timeout(60)
+        st4 = json.loads(pg.evaluate("""JSON.stringify({
+          winner:window.__tttx.G.winner,
+          wl:!!document.getElementById('winline'),
+          chip:document.getElementById('chip').textContent})"""))
+        check('gate: win decided but winline waits for cascade', st4['winner']=='X' and not st4['wl'] and 'captures' in st4['chip'], st4)
+        pg.wait_for_timeout(2600)
+        st5 = json.loads(pg.evaluate("""JSON.stringify({
+          wl:!!document.getElementById('winline'),
+          chip:document.getElementById('chip').textContent})"""))
+        check('gate: winline + win chip after cascade', st5['wl'] and 'wins' in st5['chip'], st5)
+
+        # slow cascade window is longer than normal
+        craft(pg,'slow')
+        pg.evaluate("window.__tttx.move(0,2)")
+        pg.wait_for_timeout(2600)
+        check('gate: slow cascade still gated when normal would be done', 'captures' in pg.evaluate("document.getElementById('chip').textContent"))
+        pg.wait_for_timeout(2800)
+        check('gate: slow reveals after its own beat', 'to move' in pg.evaluate("document.getElementById('chip').textContent"))
+        b.close()
+
+gating_tests()
 def chain_tests():
     with sync_playwright() as p:
         b = p.chromium.launch()
