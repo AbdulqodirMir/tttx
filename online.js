@@ -19,6 +19,9 @@ let hb=0, goneOff=null, goneRef=null, oppPresOff=null, oppGoneTimer=0, oppGoneUi
 const GONE_GRACE=()=>+(localStorage.getItem('tttx-gone-grace')||45000);
 
 const Online={active:()=>!!roomId, seat:()=>seat, spectating:()=>spectate};
+// top-bar pill counts OTHER players only (presence list already excludes self); alone shows the resting label
+function fmtOnlinePill(n){return '<span class="dot"></span>'+(n>0?n+' online':'Online')}
+Online.fmtOnlinePill=fmtOnlinePill;
 window.Online=Online;
 
 let roomLink='';
@@ -32,7 +35,7 @@ function legacyCopy(txt){const i=$('#rlink');if(i&&i.value===txt){i.select();try
 function shareLink(){if(roomLink&&navigator.share)navigator.share({title:'TicTacToe Extended',text:'Play TicTacToe Extended with me',url:roomLink}).catch(()=>{})}
 const popOpen=e=>!!(e&&e.matches&&e.matches(':popover-open'));
 function toast(msg,ms=2600){const t=$('#toast');t.textContent=msg;if(!popOpen(t))t.showPopover();t.className='show';clearTimeout(t._h);t._h=setTimeout(()=>{t.className='';if(popOpen(t))t.hidePopover()},ms)}
-const wbShow=e=>{if(e&&!popOpen(e))e.showPopover()};const wbHide=e=>{if(e&&popOpen(e))e.hidePopover()};
+const wbShow=e=>{if(e)e.classList.add('on')};const wbHide=e=>{if(e)e.classList.remove('on')};
 function toastAsk(fromNick,accept,decline){
   const t=$('#toast');t.innerHTML='';
   const s=document.createElement('span');s.textContent=fromNick+' invites you to play';
@@ -59,7 +62,7 @@ async function presenceOn(){
     const v=snap.val()||{},now=nowSrv();
     const list=Object.entries(v).filter(([u,p])=>u!==me.uid&&p&&!p.hide&&p.ts&&now-p.ts<90000);
     $('#pcount').textContent=list.length;
-    const ob=$('#online');if(ob)ob.innerHTML='<span class="dot"></span>'+(list.length+1)+' online';
+    const ob=$('#online');if(ob)ob.innerHTML=fmtOnlinePill(list.length);
     const el=$('#plist');el.innerHTML='';
     if(!list.length){el.innerHTML='<p class="dim">Nobody else here yet. Share an invite link!</p>';return}
     for(const[u,p]of list){
