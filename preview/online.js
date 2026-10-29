@@ -62,7 +62,7 @@ async function presenceOn(){
       const row=document.createElement('div');row.className='pitem';
       const dot=document.createElement('span');dot.className='dot'+(p.room?' busy':'');
       const n=document.createElement('span');n.className='nick';n.textContent=p.nick;
-      const st=document.createElement('span');st.className='st';st.textContent=p.room?'· in a game':'· free';
+      const st=document.createElement('span');st.className='st';st.textContent=(p.room?'· in a game':'· free')+(p.site?' · on '+p.site:'');
       const b=document.createElement('button');
       if(p.room){b.textContent='In a game';b.disabled=true}
       else{b.textContent='Invite';b.onclick=()=>sendInvite(u,p.nick,b)}
