@@ -139,7 +139,7 @@ label.t{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(-
 #toast button.ok{background:rgba(255,93,143,.16);border-color:rgba(255,93,143,.55)}
 #obar{width:100%;max-width:560px;padding:8px 14px;display:none;align-items:center;gap:10px;font-size:13px;color:var(--tx);box-sizing:border-box}
 #obar button{margin-left:auto;padding:5px 12px;font-size:12px}
-#waitbar{position:fixed;inset:auto;margin:0;top:64px;left:50%;transform:translateX(-50%);width:min(560px,92vw);max-width:92vw;padding:9px 14px;align-items:center;gap:10px;font-size:13px;color:var(--tx);background:rgba(139,156,255,.08);border:1px solid rgba(139,156,255,.35);border-radius:14px;margin:0 0 8px;box-sizing:border-box}
+#waitbar{position:fixed;inset:auto;margin:0;bottom:calc(64px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:min(560px,92vw);max-width:92vw;padding:9px 14px;align-items:center;gap:10px;font-size:13px;color:var(--tx);background:rgba(139,156,255,.08);border:1px solid rgba(139,156,255,.35);border-radius:14px;margin:0 0 8px;box-sizing:border-box}
 #waitbar:popover-open{display:flex}
 #waitbar:not(:popover-open){display:none}
 #waitbar button{margin-left:auto;padding:6px 12px;font-size:13px;font-weight:600}
@@ -159,6 +159,7 @@ label.chk{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--dim
 label.chk input{appearance:none;-webkit-appearance:none;width:18px;height:18px;border-radius:6px;border:1.5px solid rgba(139,156,255,.5);background:rgba(139,156,255,.08);cursor:pointer;transition:.15s;margin:0;flex:none}
 label.chk input:checked{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12.5l5 5L20 6.5'/%3E%3C/svg%3E"),linear-gradient(135deg,#6d5cff,#ff5d8f);background-repeat:no-repeat;background-position:center;background-size:12px,cover;border-color:transparent}
 input:focus-visible,button:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid rgba(139,156,255,.65);outline-offset:2px}
+.seg button:focus-visible{outline-offset:-2px}
 ::selection{background:rgba(255,93,143,.35);color:#fff}
 html{scrollbar-width:thin;scrollbar-color:rgba(139,156,255,.35) transparent}
 ::-webkit-scrollbar{width:9px;height:9px}
@@ -557,7 +558,7 @@ function syncSeg(){
     document.querySelectorAll('#'+id+' button').forEach(b=>b.classList.toggle('on',b.dataset.v===cfg[k]));
 }
 for(const[id,k]of[['segMode','mode'],['segRule','rule'],['segFirst','first'],['segSpeed','speed']])
-  document.querySelectorAll('#'+id+' button').forEach(b=>b.onclick=()=>{cfg[k]=b.dataset.v;syncSeg()});
+  document.querySelectorAll('#'+id+' button').forEach(b=>b.onclick=()=>{cfg[k]=b.dataset.v;syncSeg();persist()});
 for(const d of['dlg','over','lobby']){const el=$('#'+d);el.addEventListener('click',e=>{if(e.target===el)el.close()})}
 $('#menu').onclick=()=>{syncSeg();$('#dlg').showModal()};
 $('#playbtn').onclick=()=>$('#online').click();
