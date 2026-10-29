@@ -231,6 +231,8 @@ function enterRoom(id,asSeat,spec,keepLobby){
         const px=cur.players.X,po=cur.players.O;
         if(!px||!po)return;
         cur.players={X:po,O:px};
+        const sc=cur.score||{X:0,O:0,D:0};
+        cur.score={X:sc.O||0,O:sc.X||0,D:sc.D||0}; // scores stay with the players across the seat swap
         cur.state=freshState();cur.anim=null;cur.moveCount=0;cur.gameId=(cur.gameId||1)+1;cur.rematch=null;cur.status='playing';
         return cur;
       }).catch(()=>{});
