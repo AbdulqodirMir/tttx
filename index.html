@@ -313,6 +313,24 @@ footer a:hover{opacity:.7}
   body:has(#waitbar.on) #waitbar{margin:4px 12px 6px}
   body:has(#waitbar.on) #hintrow{display:none}
 }
+@media(min-width:641px){
+ body{--board:min(72vw,calc(66.6667svh + 6.6667px),calc(100svh - var(--top) - var(--sg) - 125px));--top:clamp(76px,11.75svh,94px);--sg:clamp(20px,calc(13.333svh - 66.667px),40px);min-height:100svh}
+ header{position:absolute;inset:0 0 auto;width:100%;max-width:none;box-sizing:border-box;padding:10px 24px;gap:8px}
+ .hchips{margin-left:auto}
+ .backpill{margin-left:0}
+ main{position:absolute;top:var(--top);left:50%;transform:translateX(-50%);padding:0;width:var(--board);max-width:none;animation:none}
+ #big{width:100%;min-width:0}
+ #status{position:absolute;top:calc(var(--top) + var(--board) + var(--sg));left:0;right:0;width:100%;max-width:none;min-height:28px;height:28px;padding:0;justify-content:center;box-sizing:border-box;animation:none}
+ #status .turn{position:fixed;top:33px;left:50%;transform:translateX(-50%);margin:0}
+ .pillrow{position:absolute;top:calc(var(--top) + var(--board) + var(--sg) + 47px);left:0;right:0;width:100%;max-width:none;margin:0;animation:none}
+ #hintrow{position:absolute;top:calc(var(--top) + var(--board) + var(--sg) + 95px);left:0;right:0;max-width:none;width:100%;justify-content:center;padding:0;animation:none}
+ #hint{flex:0 1 auto}
+ #capline{position:absolute;bottom:4px;margin:0}
+ #waitbar{left:14px;bottom:104px;transform:none;width:calc(50vw - var(--board)/2 - 30px);max-width:none;flex-wrap:wrap}
+ #waitbar>span{flex:1 1 100%}
+ #obar{position:fixed;bottom:4px;left:14px;width:auto;max-width:calc(50vw - var(--board)/2 - 30px);flex-wrap:wrap}
+}
+
 </style>
 </head>
 <body>
@@ -990,4 +1008,3 @@ window.__tttx={get G(){return G},setOnlineRule(r){onlineRule=r||null},effRule:()
 <script type="module" src="/online.js"></script>
 </body>
 </html>
-
