@@ -262,21 +262,27 @@ Online.debugInvite=(uid,nick)=>sendInvite(uid,nick,{disabled:false,textContent:'
 async function boot(){
   $('#online').onclick=openLobby;
   $('#lclose').onclick=()=>$('#lobby').close();
-  $('#reshuffle').onclick=()=>{myNick=nick();localStorage.setItem('tttx-nick',myNick);$('#mynick').textContent=myNick;presenceOn()};
+  const rs=$('#reshuffle');
+  const doReshuffle=()=>{if(Date.now()-(window.__nickSavedAt||0)<300)return;myNick=nick();localStorage.setItem('tttx-nick',myNick);$('#mynick').textContent=myNick;presenceOn()};
+  rs.onclick=doReshuffle;
   const mn=$('#mynick');
   mn.style.cursor='text';mn.title='Tap to edit';
   mn.onclick=()=>{
     if(mn.dataset.editing)return;mn.dataset.editing='1';
+    rs.textContent='\u2713';rs.title='Save name';
     const inp=document.createElement('input');
     inp.value=myNick;inp.maxLength=16;inp.id='mynickedit';
     inp.style.cssText='font:inherit;font-weight:700;background:#0a0d15;border:1px solid var(--line);border-radius:8px;padding:2px 8px;width:10em;color:var(--txt);margin:0 6px 0 2px;vertical-align:middle';
     mn.replaceWith(inp);inp.focus();inp.select();
     const done=ok=>{
+      if(!mn.dataset.editing)return;
       const v=inp.value.trim().slice(0,16);
       inp.replaceWith(mn);delete mn.dataset.editing;
-      if(ok&&v){myNick=v;localStorage.setItem('tttx-nick',myNick);presenceOn()}
+      rs.textContent='\u21bb';rs.title='';rs.onclick=doReshuffle;
+      if(ok&&v){window.__nickSavedAt=Date.now();myNick=v;localStorage.setItem('tttx-nick',myNick);presenceOn()}
       mn.textContent=myNick;
     };
+    rs.onclick=()=>done(true);
     inp.onkeydown=e=>{if(e.key==='Enter')done(true);else if(e.key==='Escape')done(false)};
     inp.onblur=()=>done(true);
   };
