@@ -204,9 +204,11 @@ async function sendInvite(toUid,toNick,btn){
   toast('Invite sent to '+toNick);
   roomLink=location.origin+location.pathname+'?room='+id;
   const wb=$('#waitbar');wbShow(wb);
-  wb.querySelector('span').textContent='Invited '+toNick+' - waiting for answer (60s)';
-  const wc=$('#waitcancel');if(wc){wc.style.display='';wc.onclick=()=>{update(ir,{status:'cancelled'}).catch(()=>{});remove(ref(db,'rooms/'+id)).catch(()=>{});if(sentInvite){sentInvite();sentInvite=null}wbHide(wb);wc.style.display='none';btn.disabled=false;btn.textContent='Invite';toast('Invite cancelled')}}
-  const clearWait=()=>{wbHide(wb);if(wc)wc.style.display='none'};
+  const wspan=wb.querySelector('span');const t0=Date.now();
+  const tick=()=>{const left=Math.max(0,60-Math.floor((Date.now()-t0)/1000));wspan.textContent='Invited '+toNick+' - waiting for answer ('+left+'s)'};
+  tick();const cd=setInterval(tick,1000);
+  const wc=$('#waitcancel');if(wc){wc.style.display='';wc.onclick=()=>{clearInterval(cd);update(ir,{status:'cancelled'}).catch(()=>{});remove(ref(db,'rooms/'+id)).catch(()=>{});if(sentInvite){sentInvite();sentInvite=null}wbHide(wb);wc.style.display='none';btn.disabled=false;btn.textContent='Invite';toast('Invite cancelled')}}
+  const clearWait=()=>{clearInterval(cd);wbHide(wb);if(wc)wc.style.display='none'};
   if(sentInvite)sentInvite();
   const rref=ref(db,'rooms/'+id);
   let presWatch=null;
@@ -267,7 +269,7 @@ async function boot(){
     if(mn.dataset.editing)return;mn.dataset.editing='1';
     const inp=document.createElement('input');
     inp.value=myNick;inp.maxLength=16;inp.id='mynickedit';
-    inp.style.cssText='font:inherit;font-weight:700;background:#0a0d15;border:1px solid var(--line);border-radius:8px;padding:2px 8px;width:10em;color:var(--txt)';
+    inp.style.cssText='font:inherit;font-weight:700;background:#0a0d15;border:1px solid var(--line);border-radius:8px;padding:2px 8px;width:10em;color:var(--txt);margin:0 6px 0 2px;vertical-align:middle';
     mn.replaceWith(inp);inp.focus();inp.select();
     const done=ok=>{
       const v=inp.value.trim().slice(0,16);
