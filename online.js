@@ -314,11 +314,13 @@ function wireReconnect(){
   let wasDown=false;
   onValue(ref(db,'.info/connected'),s=>{
     const c=!!s.val();
+    if(!c&&roomId)toast('Connection lost - reconnecting\u2026');
     if(c&&wasDown&&roomId)resyncFromServer('reconnect');
     wasDown=!c;
   });
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&roomId)resyncFromServer()});
   window.addEventListener('online',()=>{if(roomId)resyncFromServer('reconnect')});
+  window.addEventListener('pageshow',e=>{if(e.persisted&&roomId)resyncFromServer('reconnect')}); // mobile bfcache restore
 }
 
 // ---------- invites ----------
@@ -357,7 +359,9 @@ async function sendInvite(toUid,toNick,btn){
   });
   presWatch=onValue(ref(db,'presence/'+toUid),ps=>{
     if(!sentInvite)return; // already resolved
-    if(!ps.val()){stopWatch();clearWait();rearm();toast(toNick+' went offline');update(ir,{status:'offline'}).catch(()=>{});remove(rref).catch(()=>{})}
+    const pv=ps.val();
+    const stale=!pv||!pv.ts||(nowSrv()-pv.ts>90000); // dead tab leaves a stale row, not null
+    if(stale){stopWatch();clearWait();rearm();toast(toNick+' went offline');update(ir,{status:'offline'}).catch(()=>{});remove(rref).catch(()=>{})}
   });
   setTimeout(()=>{if(!sentInvite)return;get(rref).then(s=>{const v=s.val();if(v&&v.status==='waiting'&&!(v.players&&v.players.O)){stopWatch();clearWait();rearm();toast(toNick+" didn't respond in 60 s");update(ir,{status:'expired'}).catch(()=>{});remove(rref).catch(()=>{})}})},65000);
 }
