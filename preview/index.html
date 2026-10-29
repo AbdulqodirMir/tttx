@@ -559,7 +559,7 @@ function syncSeg(){
 }
 for(const[id,k]of[['segMode','mode'],['segRule','rule'],['segFirst','first'],['segSpeed','speed']])
   document.querySelectorAll('#'+id+' button').forEach(b=>b.onclick=()=>{cfg[k]=b.dataset.v;syncSeg();persist()});
-for(const d of['dlg','over','lobby']){const el=$('#'+d);el.addEventListener('click',e=>{if(e.target===el)el.close()})}
+for(const d of['dlg','over','lobby']){const el=$('#'+d);el.addEventListener('click',e=>{if(e.target===el&&!document.querySelector('#mynickedit'))el.close()})}
 $('#menu').onclick=()=>{syncSeg();$('#dlg').showModal()};
 $('#playbtn').onclick=()=>$('#online').click();
 $('#howbtn').onclick=()=>{syncSeg();$('#dlg').showModal()};
