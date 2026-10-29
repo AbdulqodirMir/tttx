@@ -1,5 +1,5 @@
 // TTTX online: rooms + invite links, presence list + gentle invites, rematch, spectate.
-import {db,ready} from '../js/fb.js';
+import {db,ready} from './js/fb.js';
 import {ref,get,set,update,remove,push,onValue,onDisconnect,serverTimestamp,increment} from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
 
 const $=s=>document.querySelector(s);
@@ -62,7 +62,7 @@ async function presenceOn(){
       const row=document.createElement('div');row.className='pitem';
       const dot=document.createElement('span');dot.className='dot'+(p.room?' busy':'');
       const n=document.createElement('span');n.className='nick';n.textContent=p.nick;
-      const st=document.createElement('span');st.className='st';st.textContent=p.room?'· in a game':'· free';
+      const st=document.createElement('span');st.className='st';st.textContent=(p.room?'· in a game':'· free')+(p.site?' · on '+p.site:'');
       const b=document.createElement('button');
       if(p.room){b.textContent='In a game';b.disabled=true}
       else{b.textContent='Invite';b.onclick=()=>sendInvite(u,p.nick,b)}
@@ -204,9 +204,11 @@ async function sendInvite(toUid,toNick,btn){
   toast('Invite sent to '+toNick);
   roomLink=location.origin+location.pathname+'?room='+id;
   const wb=$('#waitbar');wbShow(wb);
-  wb.querySelector('span').textContent='Invited '+toNick+' - waiting for answer (60s)';
-  const wc=$('#waitcancel');if(wc){wc.style.display='';wc.onclick=()=>{update(ir,{status:'cancelled'}).catch(()=>{});remove(ref(db,'rooms/'+id)).catch(()=>{});if(sentInvite){sentInvite();sentInvite=null}wbHide(wb);wc.style.display='none';btn.disabled=false;btn.textContent='Invite';toast('Invite cancelled')}}
-  const clearWait=()=>{wbHide(wb);if(wc)wc.style.display='none'};
+  const wspan=wb.querySelector('span');const t0=Date.now();
+  const tick=()=>{const left=Math.max(0,60-Math.floor((Date.now()-t0)/1000));wspan.textContent='Invited '+toNick+' - waiting for answer ('+left+'s)'};
+  tick();const cd=setInterval(tick,1000);
+  const wc=$('#waitcancel');if(wc){wc.style.display='';wc.onclick=()=>{clearInterval(cd);update(ir,{status:'cancelled'}).catch(()=>{});remove(ref(db,'rooms/'+id)).catch(()=>{});if(sentInvite){sentInvite();sentInvite=null}wbHide(wb);wc.style.display='none';btn.disabled=false;btn.textContent='Invite';toast('Invite cancelled')}}
+  const clearWait=()=>{clearInterval(cd);wbHide(wb);if(wc)wc.style.display='none'};
   if(sentInvite)sentInvite();
   const rref=ref(db,'rooms/'+id);
   let presWatch=null;
@@ -260,21 +262,27 @@ Online.debugInvite=(uid,nick)=>sendInvite(uid,nick,{disabled:false,textContent:'
 async function boot(){
   $('#online').onclick=openLobby;
   $('#lclose').onclick=()=>$('#lobby').close();
-  $('#reshuffle').onclick=()=>{myNick=nick();localStorage.setItem('tttx-nick',myNick);$('#mynick').textContent=myNick;presenceOn()};
+  const rs=$('#reshuffle');
+  const doReshuffle=()=>{if(Date.now()-(window.__nickSavedAt||0)<300)return;myNick=nick();localStorage.setItem('tttx-nick',myNick);$('#mynick').textContent=myNick;presenceOn()};
+  rs.onclick=doReshuffle;
   const mn=$('#mynick');
   mn.style.cursor='text';mn.title='Tap to edit';
   mn.onclick=()=>{
     if(mn.dataset.editing)return;mn.dataset.editing='1';
+    rs.textContent='\u2713';rs.title='Save name';
     const inp=document.createElement('input');
     inp.value=myNick;inp.maxLength=16;inp.id='mynickedit';
-    inp.style.cssText='font:inherit;font-weight:700;background:#0a0d15;border:1px solid var(--line);border-radius:8px;padding:2px 8px;width:10em;color:var(--txt)';
+    inp.style.cssText='font:inherit;font-weight:700;background:#0a0d15;border:1px solid var(--line);border-radius:8px;padding:2px 8px;width:10em;color:var(--txt);margin:0 6px 0 2px;vertical-align:middle';
     mn.replaceWith(inp);inp.focus();inp.select();
     const done=ok=>{
+      if(!mn.dataset.editing)return;
       const v=inp.value.trim().slice(0,16);
       inp.replaceWith(mn);delete mn.dataset.editing;
-      if(ok&&v){myNick=v;localStorage.setItem('tttx-nick',myNick);presenceOn()}
+      rs.textContent='\u21bb';rs.title='';rs.onclick=doReshuffle;
+      if(ok&&v){window.__nickSavedAt=Date.now();myNick=v;localStorage.setItem('tttx-nick',myNick);presenceOn()}
       mn.textContent=myNick;
     };
+    rs.onclick=()=>done(true);
     inp.onkeydown=e=>{if(e.key==='Enter')done(true);else if(e.key==='Escape')done(false)};
     inp.onblur=()=>done(true);
   };
