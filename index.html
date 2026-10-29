@@ -41,6 +41,7 @@ button.solid{background:var(--o);border-color:var(--o);color:#20050f;font-weight
 .pl .num{font-weight:700;font-size:16px;color:var(--tx);font-variant-numeric:tabular-nums}
 .mX{color:var(--x)}.mO{color:var(--o)}
 .pl.me{border-bottom:2px solid rgba(139,156,255,.55);border-radius:3px;padding-bottom:2px}
+#nmX.ed,#nmO.ed{cursor:text;border-bottom:1px dashed var(--dim);padding-bottom:1px}
 #plO.me::after{color:var(--o);border-color:rgba(255,93,143,.4)}
 .sepdot{color:var(--dim)}
 #score{color:var(--dim);font-size:12px}
@@ -187,7 +188,7 @@ html{scrollbar-width:thin;scrollbar-color:rgba(139,156,255,.35) transparent}
 <div class="aurora"></div><div class="stars"></div><div class="blob b1"></div><div class="blob b2"></div>
 <header>
   <div class="brand">TicTacToe <em>Extended</em></div>
-  <div class="hchips"><button id="online" class="hchip" title="Play online"><span class="dot"></span>Online</button><button id="undo" class="hchip" title="Undo">Undo</button><button id="menu" class="hchip" title="Settings">Settings</button></div>
+  <div class="hchips"><button id="online" class="hchip" title="Play online"><span class="dot"></span>Online</button><button id="undo" class="hchip" title="Undo">Undo</button><button id="redo" class="hchip" title="Redo" disabled>Redo</button><button id="menu" class="hchip" title="Settings">Settings</button></div>
 </header>
 <div id="status">
   <span class="pl" id="plX"><span class="mk"><svg viewBox="0 0 100 100"><path class="mark mx" d="M22 22L78 78M78 22L22 78"/></svg></span><span id="nmX">You</span><span class="num mX" id="scX">0</span></span>
@@ -221,7 +222,7 @@ html{scrollbar-width:thin;scrollbar-color:rgba(139,156,255,.35) transparent}
   </div>
   </div>
 </dialog>
-<dialog id="over"><div class="big" id="overTxt"></div><p id="overSub"></p><div class="row" style="justify-content:center"><button id="again" class="acc">Play again</button><button id="view">View board</button></div></dialog>
+<dialog id="over"><div class="big" id="overTxt"></div><p id="overSub"></p><button id="share" class="solid" style="width:100%;padding:13px 16px;font-size:15px;margin-top:8px">Share result</button><div class="row" style="justify-content:center"><button id="again" class="acc">Play again</button><button id="view">View board</button></div></dialog>
 
 <div id="obar"><span class="dot"></span><span id="oseat"></span><span id="onick"></span><button id="leave">Leave</button></div>
 <div id="waitbar" popover="manual"><span>Room ready - send this link, then stay on this page</span><button id="waitcopy">Copy link</button><button id="waitshare" class="ghost" style="display:none">Share</button><button id="waitcancel" class="ghost" style="display:none">Cancel invite</button></div>
@@ -245,6 +246,7 @@ const $=s=>document.querySelector(s);
 const store={get(){try{return JSON.parse(localStorage.getItem('tttx')||'{}')}catch(e){return{}}},set(o){localStorage.setItem('tttx',JSON.stringify(o))}};
 const saved=store.get();
 const cfg=Object.assign({mode:'cpu',rule:'line',first:'X',speed:'slow'},saved.cfg||{});
+if(!cfg.names)cfg.names={X:'',O:''};
 const score=Object.assign({X:0,O:0,D:0},saved.score||{});
 if(cfg.v!==2){cfg.rule='line';cfg.v=2;store.set({cfg,score,game:saved.game})}
 let G; // state
@@ -252,7 +254,7 @@ const other=p=>p==='X'?'O':'X';
 let onlineRule=null; // online rooms pin the host's rule
 const effRule=()=>onlineRule||cfg.rule;
 
-function fresh(){return{cells:Array.from({length:9},()=>Array(9).fill('')),owner:Array(9).fill(''),turn:cfg.first,target:-1,winner:'',hist:[],last:null,echo:Array.from({length:9},()=>Array(9).fill(0))}}
+function fresh(){return{cells:Array.from({length:9},()=>Array(9).fill('')),owner:Array(9).fill(''),turn:cfg.first,target:-1,winner:'',hist:[],redo:[],maxChain:0,last:null,echo:Array.from({length:9},()=>Array(9).fill(0))}}
 function boxFull(g,b){return g.cells[b].every(Boolean)}
 function boxDone(g,b){return !!g.owner[b]||boxFull(g,b)} // owner can be 'D' for drawn
 function boxWinnable(g,b,P){ // can P still complete a line in box b (echoes are real marks, already in cells)
@@ -340,6 +342,7 @@ function play(g,b,i){
     g.lastChainCaps.push([b,dCap]);
     applyEchoes(g,b,dCap+T.popDur);
     g._cascEnd=Math.max.apply(null,g.lastChainCaps.map(m=>m[1]))+T.popDur;
+    if(g.lastChainCaps.length>(g.maxChain||0))g.maxChain=g.lastChainCaps.length;
   }}
   // in line mode a won box is closed immediately; fill mode closes when full (owner set at full)
   // any capture (incl. chain/echo captures from this move) frees the opponent: play anywhere
@@ -459,14 +462,20 @@ function render(){
   $('#hint').textContent=over?'':G.target<0?'Play anywhere':free?'Target box is closed. Play any open box.':'Play in the glowing box';
   $('#scX').textContent=score.X;$('#scO').textContent=score.O;
   $('#score').textContent=score.D?('draws '+score.D):'';
-  let nm=cfg.mode==='cpu'?{X:'You',O:'CPU'}:{X:'Player X',O:'Player O'};
+  let nm=cfg.mode==='cpu'?{X:'You',O:'CPU'}:{X:cfg.names.X||'Player X',O:cfg.names.O||'Player O'};
   if(onl){const n=Online.names&&Online.names();if(n)nm={X:n.X||'\u2026',O:n.O||'\u2026'}}
   $('#nmX').textContent=nm.X;$('#nmO').textContent=nm.O;
   $('#plX').classList.toggle('me',(onl&&Online.seat()==='X')||(!onl&&cfg.mode==='cpu'));
   $('#plO').classList.toggle('me',!!(onl&&Online.seat()==='O'));
+  const nmedit=cfg.mode==='2p'&&!onl;
+  $('#nmX').classList.toggle('ed',nmedit);$('#nmO').classList.toggle('ed',nmedit);
+  $('#nmX').title=nmedit?'Tap to edit':'';$('#nmO').title=nmedit?'Tap to edit':'';
   bigEl.classList.toggle('olock',!!(onl&&Online.waiting&&Online.waiting()));
   $('#undo').disabled=!G.hist.length||over&&false||onl;
   $('#undo').title=onl?'Undo is off in online games':'Undo';
+  $('#redo').disabled=onl||!(G.redo&&G.redo.length);
+  $('#redo').title=onl?'Redo is off in online games':'Redo';
+  chip.style.cursor=over?'pointer':'';
   if(window.Online&&Online.active()){
     const st=Online.statusText();
     $('#oseat').innerHTML=Online.spectating()?'':('You are '+mkIco(Online.seat()));
@@ -502,6 +511,7 @@ let cpuTimer=0;
 function move(b,i){
   const beforeOpp=oppMap(G);
   G.hist.push(snapshot());
+  G.redo=[];
   play(G,b,i);
   const afterOpp=oppMap(G);
   const od=G.lastEchoes&&G.lastEchoes.length?Math.max.apply(null,G.lastEchoes.map(e=>e[2]))+240:0;
@@ -549,7 +559,8 @@ function cpuPick(g){
 function showOver(){
   if(!G.winner)return;
   const w=G.winner;
-  $('#overTxt').innerHTML=w==='D'?(G.autoDraw?'Draw - no line can be completed':'Draw'):mkIco(w)+' wins';
+  const cnm=w!=='D'&&cfg.mode==='2p'?cfg.names[w]:'';
+  $('#overTxt').innerHTML=w==='D'?(G.autoDraw?'Draw - no line can be completed':'Draw'):mkIco(w)+(cnm?' '+escHtml(cnm):'')+' wins';
   const x=G.owner.filter(v=>v==='X').length,o=G.owner.filter(v=>v==='O').length;
   $('#overSub').innerHTML='Boxes captured: '+mkIco('X')+' '+x+' · '+mkIco('O')+' '+o;
   if(!$('#over').open)$('#over').showModal();
@@ -575,15 +586,175 @@ $('#undo').onclick=()=>{
   const wasOver=!!G.winner;
   let n=1;if(cfg.mode==='cpu'&&G.hist.length>=2&&G.turn==='X')n=2; // undo CPU reply and own move
   if(cfg.mode==='cpu'&&G.turn==='O'&&!wasOver)n=1;
-  let s;while(n--&&G.hist.length)s=G.hist.pop();
+  let s;const popped=[];while(n--&&G.hist.length){s=G.hist.pop();popped.push(s)}
   if(wasOver)score[G.winner]=Math.max(0,score[G.winner]-1);
-  const h=G.hist;G=Object.assign(JSON.parse(s),{hist:h});persist();render();maybeCpu();
+  (G.redo=G.redo||[]).push({cur:snapshot(),popped});
+  const h=G.hist,r=G.redo;G=Object.assign(JSON.parse(s),{hist:h,redo:r});persist();render();maybeCpu();
 };
+$('#redo').onclick=()=>{
+  if(!G.redo||!G.redo.length)return;clearTimeout(cpuTimer);
+  const e=G.redo.pop();
+  const states=[];for(let i=e.popped.length-1;i>=0;i--)states.push(e.popped[i]);states.push(e.cur);
+  let s;for(let i=0;i<states.length-1;i++){G.hist.push(states[i]);s=states[i+1]}
+  const h=G.hist,r=G.redo;G=Object.assign(JSON.parse(s),{hist:h,redo:r});
+  if(G.winner){score[G.winner]++;setTimeout(showOver,650)}
+  persist();render();maybeCpu();
+};
+$('#chip').onclick=()=>{if(G.winner)showOver()};
 build();
-if(saved.game&&saved.game.cells){G=saved.game;G.hist=G.hist||[];if(!G.echo)G.echo=Array.from({length:9},()=>Array(9).fill(0));}else G=fresh();
+if(saved.game&&saved.game.cells){G=saved.game;G.hist=G.hist||[];G.redo=[];G.maxChain=G.maxChain||0;if(!G.echo)G.echo=Array.from({length:9},()=>Array(9).fill(0));}else G=fresh();
 render();maybeCpu();
-window.__tttx={get G(){return G},setOnlineRule(r){onlineRule=r||null},effRule:()=>effRule(),effRule:()=>effRule(),deadGame:()=>deadGame(G),mkIco,setG(o){G=o},cfg,score,play:tap,move,badTap,warn,legal:()=>legal(G),oppMap:()=>oppMap(G),pace,render,persist,fresh:()=>{newGame()},localNew:newGame,showOver};
+
+// --- share result card (canvas -> PNG, Web Share API with download+copy fallback) ---
+const SHARE_URL='https://tttx.miraliyev.tech/';
+function sToast(msg,ms){const t=$('#toast');if(!t)return;t.textContent=msg;try{if(!t.matches(':popover-open'))t.showPopover()}catch(e){}t.className='show';clearTimeout(t._h);t._h=setTimeout(()=>{t.className='';try{if(t.matches(':popover-open'))t.hidePopover()}catch(e){}},ms||2600)}
+function copyTxt(txt){
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).catch(()=>legCopy(txt));return}
+  legCopy(txt);
+}
+function legCopy(txt){const ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy')}catch(e){}ta.remove()}
+function cardData(){
+  return{
+    w:G.winner,
+    nm:{X:$('#nmX').textContent,O:$('#nmO').textContent},
+    sx:$('#scX').textContent,so:$('#scO').textContent,
+    bx:G.owner.filter(v=>v==='X').length,bo:G.owner.filter(v=>v==='O').length,
+    chain:G.maxChain||0,
+    cells:G.cells,owner:G.owner,echo:G.echo
+  };
+}
+async function makeCardBlob(){
+  const d=cardData();
+  const W=1080,H=1350,cv=document.createElement('canvas');cv.width=W;cv.height=H;
+  const c=cv.getContext('2d');
+  try{await Promise.all([
+    document.fonts.load('400 118px "Instrument Serif"'),
+    document.fonts.load('italic 400 56px "Instrument Serif"'),
+    document.fonts.load('400 56px "Instrument Serif"'),
+    document.fonts.load('400 34px "Bricolage Grotesque"'),
+    document.fonts.load('600 38px "Bricolage Grotesque"'),
+    document.fonts.load('700 40px "Bricolage Grotesque"')
+  ])}catch(e){}
+  const TX='#f5f3ee',DIM='#a29fb2',XC='#8b9cff',OC='#ff5d8f',DC='#5a5f75';
+  const SER='"Instrument Serif",Georgia,serif',SAN='"Bricolage Grotesque",system-ui,sans-serif';
+  c.fillStyle='#05060f';c.fillRect(0,0,W,H);
+  let g=c.createRadialGradient(W*.7,H*.1,40,W*.7,H*.1,W*.85);
+  g.addColorStop(0,'rgba(20,26,85,.95)');g.addColorStop(.7,'rgba(20,26,85,0)');
+  c.fillStyle=g;c.fillRect(0,0,W,H);
+  g=c.createRadialGradient(W*.82,H*.05,20,W*.82,H*.05,340);
+  g.addColorStop(0,'rgba(255,93,143,.20)');g.addColorStop(1,'rgba(255,93,143,0)');
+  c.fillStyle=g;c.fillRect(0,0,W,H);
+  g=c.createRadialGradient(W*.05,H*.95,20,W*.05,H*.95,330);
+  g.addColorStop(0,'rgba(139,156,255,.16)');g.addColorStop(1,'rgba(139,156,255,0)');
+  c.fillStyle=g;c.fillRect(0,0,W,H);
+  c.fillStyle='rgba(255,255,255,.5)';
+  [[12,30],[32,70],[55,15],[78,45],[90,80],[45,88]].forEach(p=>{c.beginPath();c.arc(W*p[0]/100,H*p[1]/100,1.7,0,7);c.fill()});
+  const markCol=v=>v==='X'?XC:v==='O'?OC:DC;
+  function dX(cx,cy,span,col,lw){c.strokeStyle=col;c.lineWidth=lw;c.lineCap='round';c.beginPath();c.moveTo(cx-span/2,cy-span/2);c.lineTo(cx+span/2,cy+span/2);c.moveTo(cx+span/2,cy-span/2);c.lineTo(cx-span/2,cy+span/2);c.stroke()}
+  function dO(cx,cy,span,col,lw){c.strokeStyle=col;c.lineWidth=lw;c.beginPath();c.arc(cx,cy,span*0.52,0,7);c.stroke()}
+  function dMark(v,cx,cy,span,lw){if(v==='X')dX(cx,cy,span,markCol(v),lw);else if(v==='O')dO(cx,cy,span,markCol(v),lw)}
+  function rr(x0,y0,w,h,r){c.beginPath();if(c.roundRect)c.roundRect(x0,y0,w,h,r);else c.rect(x0,y0,w,h)}
+  function row(y,items){
+    const ws=items.map(it=>{if(it.m)return it.span;c.font=it.f;return c.measureText(it.t).width});
+    let x0=(W-ws.reduce((a,b)=>a+b,0))/2;
+    c.textBaseline='alphabetic';c.textAlign='left';
+    items.forEach((it,i)=>{if(it.m){dMark(it.m,x0+it.span/2,y-it.span*0.36,it.span,it.span*0.16)}else{c.font=it.f;c.fillStyle=it.c;c.fillText(it.t,x0,y)}x0+=ws[i]});
+  }
+  row(104,[{t:'TicTacToe ',f:'400 54px '+SER,c:TX},{t:'Extended',f:'italic 400 54px '+SER,c:OC}]);
+  if(d.w==='D')row(252,[{t:'Draw',f:'400 118px '+SER,c:TX}]);
+  else row(252,[{m:d.w,span:84},{t:'\u2002wins',f:'400 118px '+SER,c:TX}]);
+  row(314,[
+    {m:'X',span:30},{t:'\u2002'+d.nm.X+' ',f:'600 38px '+SAN,c:DIM},{t:d.sx,f:'700 40px '+SAN,c:XC},
+    {t:'   \u00b7   ',f:'400 38px '+SAN,c:DIM},
+    {m:'O',span:30},{t:'\u2002'+d.nm.O+' ',f:'600 38px '+SAN,c:DIM},{t:d.so,f:'700 40px '+SAN,c:OC}
+  ]);
+  const S=224,GAP=24,x0=(W-(3*S+2*GAP))/2,y0=370,PAD=20,CG=8,CS=(S-2*PAD-2*CG)/3;
+  const winLine=(d.w&&d.w!=='D')?(LINES.find(l=>l.every(k=>d.owner[k]===d.w))||[]):[];
+  for(let b=0;b<9;b++){
+    const bx=x0+(b%3)*(S+GAP),by=y0+Math.floor(b/3)*(S+GAP),ow=d.owner[b];
+    rr(bx,by,S,S,26);
+    c.fillStyle='rgba(245,243,238,.05)';c.fill();
+    const wl=winLine.includes(b);
+    c.lineWidth=2.5;
+    c.strokeStyle=wl?'rgba(255,255,255,.85)':ow==='X'?'rgba(139,156,255,.85)':ow==='O'?'rgba(255,93,143,.85)':'rgba(245,243,238,.13)';
+    if(wl){c.save();c.shadowColor='rgba(255,255,255,.45)';c.shadowBlur=26;c.stroke();c.restore()}else c.stroke();
+    if(!ow)for(let i=0;i<9;i++){
+      const cx0=bx+PAD+(i%3)*(CS+CG),cy0=by+PAD+Math.floor(i/3)*(CS+CG),v=d.cells[b][i];
+      rr(cx0,cy0,CS,CS,10);c.fillStyle='rgba(245,243,238,.09)';c.fill();
+      if(v){const isE=d.echo&&d.echo[b]&&d.echo[b][i];c.save();if(isE)c.globalAlpha=.55;dMark(v,cx0+CS/2,cy0+CS/2,CS*(isE?0.33:0.42),CS*0.075);c.restore()}
+    }
+    if(ow){
+      rr(bx,by,S,S,26);
+      if(ow==='D'){c.fillStyle='rgba(5,6,15,.88)';c.fill()}
+      else{const gg=c.createLinearGradient(bx,by,bx+S,by+S);
+        if(ow==='X'){gg.addColorStop(0,'rgba(139,156,255,.42)');gg.addColorStop(1,'rgba(139,156,255,.12)')}
+        else{gg.addColorStop(0,'rgba(255,93,143,.42)');gg.addColorStop(1,'rgba(255,93,143,.12)')}
+        c.fillStyle=gg;c.fill();c.fillStyle='rgba(11,14,28,.45)';c.fill()}
+      if(ow==='D'){c.font='800 84px '+SAN;c.fillStyle=DC;c.textAlign='center';c.textBaseline='middle';c.fillText('\u2013',bx+S/2,by+S/2);c.textAlign='left';c.textBaseline='alphabetic'}
+      else dMark(ow,bx+S/2,by+S/2,S*0.34,S*0.062);
+    }
+  }
+  const yb=y0+3*S+2*GAP;
+  row(yb+68,[{t:'Boxes captured   ',f:'400 34px '+SAN,c:DIM},{m:'X',span:26},{t:'\u2002'+d.bx,f:'700 38px '+SAN,c:XC},{t:'   \u00b7   ',f:'400 34px '+SAN,c:DIM},{m:'O',span:26},{t:'\u2002'+d.bo,f:'700 38px '+SAN,c:OC}]);
+  if(d.chain>=2){
+    const t='chain \u00d7'+d.chain;
+    c.font='600 32px '+SAN;const pw=c.measureText(t).width+64,ph=58,cy=yb+136;
+    rr((W-pw)/2,cy-ph/2,pw,ph,29);
+    c.fillStyle='rgba(139,156,255,.10)';c.fill();
+    c.lineWidth=2;c.strokeStyle='rgba(139,156,255,.35)';c.stroke();
+    c.fillStyle=TX;c.textAlign='center';c.textBaseline='middle';c.fillText(t,W/2,cy+2);c.textAlign='left';c.textBaseline='alphabetic';
+  }
+  row(1320,[{t:'tttx.miraliyev.tech',f:'400 32px '+SAN,c:DIM}]);
+  return new Promise(res=>cv.toBlob(b=>res(b),'image/png'));
+}
+let sharing=false;
+async function shareResult(){
+  if(sharing||!G.winner)return;sharing=true;
+  const btn=$('#share');btn.disabled=true;
+  try{
+    const blob=await makeCardBlob();
+    const d=cardData();
+    const txt=(d.w==='D'?'Draw':d.nm[d.w]+' wins')+' \u00b7 TicTacToe Extended '+SHARE_URL;
+    const file=new File([blob],'tttx-result.png',{type:'image/png'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{await navigator.share({files:[file],title:'TicTacToe Extended',text:txt});btn.disabled=false;sharing=false;return}
+      catch(e){if(e&&e.name==='AbortError'){btn.disabled=false;sharing=false;return}}
+    }
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='tttx-result.png';document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+    copyTxt(SHARE_URL);
+    sToast('Card saved \u00b7 link copied');
+  }catch(e){sToast('Could not make the card \u00b7 try again')}
+  btn.disabled=false;sharing=false;
+}
+$('#share').onclick=shareResult;
+// --- local player names (2-player mode): tap a scoreboard name to edit, saved to localStorage ---
+const escHtml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function editName(which){
+  if(cfg.mode!=='2p'||(window.Online&&Online.active()))return;
+  const el=$('#nm'+which);
+  if(!el||el.dataset.editing)return;el.dataset.editing='1';
+  const inp=document.createElement('input');
+  inp.value=cfg.names[which]||'';inp.maxLength=16;inp.placeholder='Player '+which;
+  inp.style.cssText='font:inherit;font-size:13px;background:#0a0d15;border:1px solid var(--line);border-radius:8px;padding:2px 8px;width:8em;color:var(--tx);vertical-align:middle';
+  const ok=document.createElement('button');ok.textContent='\u2713';ok.title='Save name';ok.style.cssText='padding:3px 10px;font-size:12px;margin-left:5px;vertical-align:middle';
+  el.replaceWith(inp);inp.after(ok);inp.focus();inp.select();
+  const done=save=>{
+    if(!el.dataset.editing)return;delete el.dataset.editing;
+    const v=inp.value.trim().slice(0,16);
+    inp.replaceWith(el);ok.remove();
+    if(save){cfg.names[which]=v;persist();sToast(v?('Player '+which+' is now '+v):'Name cleared')}
+    render();
+  };
+  ok.onclick=e=>{e.stopPropagation();done(true)};
+  inp.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter')done(true);else if(e.key==='Escape')done(false)};
+  inp.onclick=e=>e.stopPropagation();
+  inp.onblur=()=>done(true);
+}
+$('#nmX').onclick=()=>editName('X');
+$('#nmO').onclick=()=>editName('O');
+window.__tttx={get G(){return G},setOnlineRule(r){onlineRule=r||null},effRule:()=>effRule(),effRule:()=>effRule(),deadGame:()=>deadGame(G),mkIco,setG(o){G=o},cfg,score,play:tap,move,badTap,warn,legal:()=>legal(G),oppMap:()=>oppMap(G),pace,render,persist,fresh:()=>{newGame()},localNew:newGame,showOver,cardData,makeCardBlob,shareResult};
 </script>
-<script type="module" src="online.js"></script>
+<script type="module" src="/online.js"></script>
 </body>
 </html>
