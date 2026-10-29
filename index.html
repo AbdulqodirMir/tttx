@@ -17,11 +17,17 @@
 <meta name="twitter:title" content="TicTacToe Extended">
 <meta name="twitter:description" content="Every move sends your opponent to a new box. Captures echo across the board.">
 <meta name="twitter:image" content="https://tttx.miraliyev.tech/og-cover.png">
+<meta property="og:site_name" content="TicTacToe Extended">
+<meta property="og:image:type" content="image/png">
+<meta name="twitter:image:alt" content="TicTacToe Extended - glowing X and O marks on a dark starry board">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2305060f'/%3E%3Cpath d='M16 16l16 16M32 16L16 32' stroke='%238b9cff' stroke-width='5' stroke-linecap='round'/%3E%3Ccircle cx='44' cy='44' r='9' fill='none' stroke='%23ff5d8f' stroke-width='5'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin><link rel="dns-prefetch" href="https://www.gstatic.com">
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700&family=Instrument+Serif:ital@0;1&display=swap">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet"></noscript>
 <style>
-:root{--ink:#05060f;--tx:#f5f3ee;--dim:#a29fb2;--line:rgba(245,243,238,.13);--glass:rgba(245,243,238,.05);--cell:rgba(245,243,238,.09);--x:#8b9cff;--o:#ff5d8f;--draw:#5a5f75;--r1:10px;--r2:20px}
+:root{--ink:#05060f;--tx:#f5f3ee;--dim:#aaa7bb;--line:rgba(245,243,238,.13);--glass:rgba(245,243,238,.05);--cell:rgba(245,243,238,.09);--x:#8b9cff;--o:#ff5d8f;--draw:#5a5f75;--r1:10px;--r2:20px}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{background:var(--ink)}
 body{margin:0;min-height:100%;color:var(--tx);font-family:"Bricolage Grotesque",system-ui,sans-serif;overscroll-behavior:none}
@@ -37,6 +43,8 @@ header{width:100%;max-width:560px;display:flex;justify-content:space-between;ali
 .hchips{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 button{font:inherit;color:var(--tx);background:var(--glass);border:1px solid var(--line);border-radius:99px;padding:9px 16px;font-size:13px;cursor:pointer;backdrop-filter:blur(8px)}
 button:active{transform:scale(.97)}
+header button,.pillrow button,dialog .row button,.seg button,#waitbar button,#obar button,.pitem button{min-height:44px}
+.pillrow button{padding:12px 20px;font-size:14px}
 button:disabled{opacity:.4;cursor:default}
 .hchip{display:inline-flex;align-items:center;gap:7px;padding:7px 13px;color:var(--dim)}
 .hchip b{color:var(--tx);font-weight:600}
@@ -53,7 +61,7 @@ button.solid{background:var(--o);border-color:var(--o);color:#20050f;font-weight
 #nmX.ed,#nmO.ed{cursor:text;border-bottom:1px dashed var(--dim);padding-bottom:1px}
 #plO.me::after{color:var(--o);border-color:rgba(255,93,143,.4)}
 .sepdot{color:var(--dim)}
-#score{color:var(--dim);font-size:12px}
+#score{color:var(--dim);font-size:12.5px}
 .turn{margin-left:auto;display:inline-flex;align-items:center;gap:7px;border-radius:99px;padding:6px 14px;font-size:13px;border:1px solid rgba(139,156,255,.45);background:rgba(139,156,255,.12);color:#c9d3ff;white-space:nowrap}
 .turn::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--x);box-shadow:0 0 8px var(--x)}
 .turn.O{border-color:rgba(255,93,143,.45);background:rgba(255,93,143,.12);color:#ffc7d8}
@@ -73,7 +81,7 @@ main{width:100%;max-width:560px;display:flex;align-items:center;justify-content:
 .cell svg{width:74%;height:74%}
 .cell.can{background:rgba(245,243,238,.15)}
 .cell.can:active{background:rgba(245,243,238,.2)}
-.cell.last{outline:2px solid rgba(245,243,238,.55);outline-offset:-2px}
+
 .cell.nope{animation:shake .3s ease-out;background:rgba(255,93,143,.28)}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
 .mx{stroke:var(--x)}.mo{stroke:var(--o)}
@@ -114,7 +122,7 @@ main{width:100%;max-width:560px;display:flex;align-items:center;justify-content:
 .box:has(.cap.W.O){border-color:var(--o)}
 .pillrow{display:flex;gap:10px;margin:2px 0 10px;flex-wrap:wrap;justify-content:center;width:100%;max-width:560px}
 #hintrow{width:100%;max-width:560px;padding:4px 14px 10px;display:flex;gap:10px;align-items:baseline;min-height:30px}
-#hint{color:var(--dim);font-size:13px;flex:1}
+#hint{color:var(--dim);font-size:13.5px;flex:1}
 #hint.warn{color:var(--o);font-weight:600;animation:warnpop .25s ease-out}
 @keyframes warnpop{from{opacity:.2}to{opacity:1}}
 #capline{min-height:26px;display:flex;justify-content:center;margin:2px 0 4px}
@@ -155,10 +163,10 @@ label.t{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(-
 #waitbar button.ghost{margin-left:0;background:none;font-weight:400}
 #plist{display:flex;flex-direction:column;gap:8px;margin:8px 0}
 .pitem{display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:rgba(245,243,238,.03);border-radius:14px;padding:9px 12px;font-size:14px}
-.pitem .st{color:var(--dim);font-size:12px}
+.pitem .st{color:var(--dim);font-size:12.5px}
 .pitem .nick{font-weight:600}
 .pitem button{margin-left:auto;padding:6px 14px;font-size:12px}
-.legend{color:var(--dim);font-size:12px;margin:2px 0 8px}
+.legend{color:var(--dim);font-size:12.5px;margin:2px 0 8px}
 .dim{color:var(--dim);font-size:13px}
 #mynick{font-weight:600}
 .edit{color:var(--dim);font-size:12px;border-bottom:1px dashed var(--dim)}
@@ -174,6 +182,49 @@ html{scrollbar-width:thin;scrollbar-color:rgba(139,156,255,.35) transparent}
 ::-webkit-scrollbar{width:9px;height:9px}
 ::-webkit-scrollbar-thumb{background:rgba(139,156,255,.3);border-radius:99px}
 ::-webkit-scrollbar-track{background:transparent}
+
+/* glow pass: target pulse, last-move ripple, capture shine, echo ghosts, win line */
+#big{position:relative}
+.cell{position:relative}
+#big:not(.free) .box.live.pX{animation:breatheX 2.4s ease-in-out infinite}
+#big:not(.free) .box.live.pO{animation:breatheO 2.4s ease-in-out infinite}
+@keyframes breatheX{0%,100%{box-shadow:0 0 26px rgba(139,156,255,.18),inset 0 0 18px rgba(139,156,255,.07)}50%{box-shadow:0 0 46px rgba(139,156,255,.42),inset 0 0 26px rgba(139,156,255,.14)}}
+@keyframes breatheO{0%,100%{box-shadow:0 0 26px rgba(255,93,143,.18),inset 0 0 18px rgba(255,93,143,.07)}50%{box-shadow:0 0 46px rgba(255,93,143,.42),inset 0 0 26px rgba(255,93,143,.14)}}
+.cell.last{outline:1.5px solid rgba(245,243,238,.55);outline-offset:-1.5px}
+.cell.last:has(.mx){outline-color:rgba(139,156,255,.85)}
+.cell.last:has(.mo){outline-color:rgba(255,93,143,.85)}
+.cell.rip::after{content:'';position:absolute;inset:-2px;border-radius:inherit;border:2.5px solid rgba(245,243,238,.8);animation:rip .65s cubic-bezier(.2,.6,.3,1) forwards;pointer-events:none}
+.cell.rip:has(.mx)::after{border-color:rgba(139,156,255,.9)}
+.cell.rip:has(.mo)::after{border-color:rgba(255,93,143,.9)}
+@keyframes rip{0%{transform:scale(.7);opacity:1}100%{transform:scale(1.4);opacity:0}}
+.cap.W{overflow:hidden}
+.cap.W::after{content:'';position:absolute;top:-25%;bottom:-25%;left:0;width:42%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.30),transparent);transform:translateX(-170%) skewX(-14deg);animation:shine 1.05s ease-out .3s 1 forwards;pointer-events:none}
+@keyframes shine{to{transform:translateX(330%) skewX(-14deg)}}
+.cell.echo .mark{animation:echoIn .5s ease-out backwards}
+.cell.echo:has(.mx){animation:echoFlashX .6s ease-out backwards}
+.cell.echo:has(.mo){animation:echoFlashO .6s ease-out backwards}
+@keyframes echoFlashX{0%{box-shadow:inset 0 0 0 rgba(139,156,255,0)}35%{box-shadow:inset 0 0 20px rgba(139,156,255,.75);background:rgba(139,156,255,.22)}100%{box-shadow:inset 0 0 0 1.5px rgba(139,156,255,.5)}}
+@keyframes echoFlashO{0%{box-shadow:inset 0 0 0 rgba(255,93,143,0)}35%{box-shadow:inset 0 0 20px rgba(255,93,143,.75);background:rgba(255,93,143,.22)}100%{box-shadow:inset 0 0 0 1.5px rgba(255,93,143,.5)}}
+.box.srcpX{animation:srcpX .95s ease-out backwards}
+.box.srcpO{animation:srcpO .95s ease-out backwards}
+@keyframes srcpX{0%,55%{box-shadow:0 0 32px rgba(139,156,255,.6),inset 0 0 20px rgba(139,156,255,.16)}100%{box-shadow:0 0 0 rgba(139,156,255,0)}}
+@keyframes srcpO{0%,55%{box-shadow:0 0 32px rgba(255,93,143,.6),inset 0 0 20px rgba(255,93,143,.16)}100%{box-shadow:0 0 0 rgba(255,93,143,0)}}
+@keyframes echoIn{0%{opacity:0;transform:scale(.55)}100%{opacity:1;transform:scale(1)}}
+#winline{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:6}
+#winline line{stroke-linecap:round}
+#winline line.X{stroke:#c9d3ff;filter:drop-shadow(0 0 7px rgba(139,156,255,.9))}
+#winline line.O{stroke:#ffc7d8;filter:drop-shadow(0 0 7px rgba(255,93,143,.9))}
+#winline line.draw{stroke-dasharray:100;stroke-dashoffset:100;animation:drawline .75s ease-out .2s forwards}
+@keyframes drawline{to{stroke-dashoffset:0}}
+@media (prefers-reduced-motion:reduce){
+  #big:not(.free) .box.live.pX,#big:not(.free) .box.live.pO{animation:none}
+  .cell.rip::after{content:none;animation:none}
+  .cap.W::after{content:none;animation:none}
+  .cell.echo .mark{animation:none}
+  .cell.echo:has(.mx),.cell.echo:has(.mo){animation:none}
+  .box.srcpX,.box.srcpO{animation:none}
+  #winline line.draw{animation:none;stroke-dashoffset:0}
+}
 @media (max-width:640px){
   .brand{font-size:19px}
   header{flex-wrap:wrap;row-gap:6px;padding:12px 12px 2px}
@@ -224,6 +275,7 @@ html{scrollbar-width:thin;scrollbar-color:rgba(139,156,255,.35) transparent}
   <div class="seg" id="segRule"><button data-v="fill">it is full (most marks)</button><button data-v="line">3 in a row</button></div>
   <label class="t">Who starts</label>
   <div class="seg" id="segFirst"><button data-v="X"><span class="mk"><svg viewBox="0 0 100 100"><path class="mark mx" d="M22 22L78 78M78 22L22 78"/></svg></span></button><button data-v="O"><span class="mk"><svg viewBox="0 0 100 100"><circle class="mark mo" cx="50" cy="50" r="29"/></svg></span></button></div>
+  <p class="legend" style="margin:-4px 0 4px">Who starts takes effect on the next new game.</p>
   <label class="t">Animation speed</label>
   <div class="seg" id="segSpeed"><button data-v="slow">Slow</button><button data-v="normal">Normal</button></div>
   </div>
@@ -308,6 +360,7 @@ function applyEchoes(g,pos,base0){
     for(const p of frontier){
       if(seen.has(p))continue;seen.add(p);
       const pl=g.owner[p];if(!pl||pl==='D')continue;
+      if(g.lastChainSrc)g.lastChainSrc.push([p,base]);
       for(let b=0;b<9;b++){
         if(g.owner[b])continue;
         if(!g.cells[b][p]){g.cells[b][p]=pl;g.echo[b][p]=1;if(g.lastEchoes)g.lastEchoes.push([b,p,base+k*T.stagger]);k++}
@@ -350,7 +403,7 @@ function play(g,b,i){
   g.cells[b][i]=p;g.last=[b,i];
   const r=evalBox(g,b);
   let captured=false;g._cascEnd=0;
-  if(r&&!g.owner[b]){g.owner[b]=r;if(r!=='D'){captured=true;g.lastEchoes=[];g.lastChainCaps=[];g.lastChainGlow=[];
+  if(r&&!g.owner[b]){g.owner[b]=r;if(r!=='D'){captured=true;g.lastEchoes=[];g.lastChainCaps=[];g.lastChainGlow=[];g.lastChainSrc=[];
     const T=pace(),dGlow=T.start+T.beat,dCap=dGlow+T.glowHold;
     if(cfg.rule==='line'){const c=g.cells[b];const L=LINES.find(l=>c[l[0]]&&c[l[0]]===c[l[1]]&&c[l[1]]===c[l[2]]);if(L)g.lastChainGlow.push([b,L,dGlow,r])}
     g.lastChainCaps.push([b,dCap]);
@@ -389,6 +442,8 @@ const O_SVG='<svg viewBox="0 0 100 100"><circle class="mark mo" cx="50" cy="50" 
 const svgOf=v=>v==='X'?X_SVG:v==='O'?O_SVG:'';
 const mkIco=v=>'<span class="mk">'+svgOf(v)+'</span>';
 let fxTimers=[];
+let shownLast='';
+let cascadeUntil=0; // while the capture cascade plays, a board tap skips to the end
 const BNAMES=['top-left','top-center','top-right','middle-left','center','middle-right','bottom-left','bottom-center','bottom-right'];
 function capSay(txt,at){fxTimers.push(setTimeout(()=>{const c=$('#capline');c.querySelector('span').textContent=txt;c.classList.add('on')},at));fxTimers.push(setTimeout(()=>{$('#capline').classList.remove('on')},at+1700))}
 function fly(srcEl,dstEl,pl,at){
@@ -408,12 +463,15 @@ function fly(srcEl,dstEl,pl,at){
 function clearFx(){
   fxTimers.forEach(clearTimeout);fxTimers=[];
   document.querySelectorAll('.flydot').forEach(el=>el.remove());
+  document.querySelectorAll('.box.srcpX,.box.srcpO').forEach(el=>{el.classList.remove('srcpX','srcpO');el.style.animationDelay=''});
   const cl=$('#capline');if(cl)cl.classList.remove('on');
   document.querySelectorAll('.cell.wgX,.cell.wgO').forEach(el=>el.classList.remove('wgX','wgO'));
   document.querySelectorAll('.box.opnX,.box.opnO').forEach(el=>el.classList.remove('opnX','opnO'));
+  document.querySelectorAll('.cell.rip').forEach(el=>el.classList.remove('rip'));
 }
 function render(){
   clearFx();
+  const oldwl=document.getElementById('winline');if(oldwl)oldwl.remove();
   const onl=!!(window.Online&&Online.active());
   const moves=legal(G),ok=new Set(moves.map(m=>m[0]+'-'+m[1]));
   const liveBoxes=new Set(moves.map(m=>m[0]));
@@ -436,11 +494,36 @@ function render(){
       c.disabled=over||(!onl&&cfg.mode==='cpu'&&G.turn==='O');
     });
   });
+  // last move: one-time ring ripple, then the persistent thin outline stays
+  const ls=G.last?G.last[0]+'-'+G.last[1]+'#'+G.hist.length:'';
+  if(G.last&&ls!==shownLast){
+    shownLast=ls;
+    const rl=document.querySelector('.cell[data-b="'+G.last[0]+'"][data-i="'+G.last[1]+'"]');
+    if(rl){rl.classList.add('rip');fxTimers.push(setTimeout(()=>rl.classList.remove('rip'),720))}
+  }else if(!G.last)shownLast='';
+  // winning three boxes: one glowing line across the big board
+  if(G.winner&&G.winner!=='D'){
+    const WL=LINES.find(l=>l.every(k=>G.owner[k]===G.winner));
+    if(WL){
+      const NS='http://www.w3.org/2000/svg';
+      const svg=document.createElementNS(NS,'svg');svg.setAttribute('id','winline');
+      svg.setAttribute('viewBox','0 0 300 300');svg.setAttribute('preserveAspectRatio','none');
+      const ln=document.createElementNS(NS,'line');
+      const ctr=b=>[b%3*100+50,Math.floor(b/3)*100+50];
+      const a=ctr(WL[0]),z=ctr(WL[2]);
+      const dx=z[0]-a[0],dy=z[1]-a[1],len=Math.hypot(dx,dy)||1,ex=16;
+      ln.setAttribute('x1',(a[0]-dx/len*ex).toFixed(1));ln.setAttribute('y1',(a[1]-dy/len*ex).toFixed(1));
+      ln.setAttribute('x2',(z[0]+dx/len*ex).toFixed(1));ln.setAttribute('y2',(z[1]+dy/len*ex).toFixed(1));
+      ln.setAttribute('stroke-width','7');ln.setAttribute('pathLength','100');
+      ln.setAttribute('class',G.winner+' draw');
+      svg.appendChild(ln);bigEl.appendChild(svg);
+    }
+  }
   if(G.lastEchoes&&G.lastEchoes.length){
     capSay('echo marks land in every open box',Math.max(0,G.lastEchoes[0][2]-360));
     G.lastEchoes.forEach(m=>{
-      const el=document.querySelector('.cell[data-b="'+m[0]+'"][data-i="'+m[1]+'"] .mark');
-      if(el)el.style.animationDelay=m[2]+'ms';
+      const cell=document.querySelector('.cell[data-b="'+m[0]+'"][data-i="'+m[1]+'"]');
+      if(cell){cell.style.animationDelay=m[2]+'ms';const el=cell.querySelector('.mark');if(el)el.style.animationDelay=m[2]+'ms'}
       const src=document.querySelector('.box[data-b="'+m[1]+'"]');
       const dst=document.querySelector('.cell[data-b="'+m[0]+'"][data-i="'+m[1]+'"]');
       fly(src,dst,G.cells[m[0]][m[1]]||G.turn,m[2]);
@@ -448,6 +531,7 @@ function render(){
     G.lastEchoes=null;
   }
   if(G.lastChainCaps&&G.lastChainCaps.length){
+    cascadeUntil=Date.now()+Math.max.apply(null,G.lastChainCaps.map(m=>m[1]))+pace().popDur+150;
     G.lastChainCaps.forEach(m=>{
       const cap=document.querySelector('.box[data-b="'+m[0]+'"] .cap');
       if(cap)cap.style.animationDelay=m[1]+'ms';
@@ -463,6 +547,14 @@ function render(){
       });
     });
     G.lastChainGlow=null;
+  }
+  if(G.lastChainSrc&&G.lastChainSrc.length){
+    G.lastChainSrc.forEach(m=>{
+      const el=document.querySelector('.box[data-b="'+m[0]+'"]');
+      const pl=G.owner[m[0]];
+      if(el&&(pl==='X'||pl==='O')){const cl='srcp'+pl;el.classList.add(cl);el.style.animationDelay=m[1]+'ms';fxTimers.push(setTimeout(()=>{el.classList.remove(cl);el.style.animationDelay=''},m[1]+1000))}
+    });
+    G.lastChainSrc=null;
   }
   if(G.lastOpps&&G.lastOpps.length){
     G.lastOpps.forEach(m=>{
@@ -498,7 +590,14 @@ function render(){
 }
 function snapshot(){return JSON.stringify({cells:G.cells,owner:G.owner,turn:G.turn,target:G.target,winner:G.winner,autoDraw:G.autoDraw||null,last:G.last,echo:G.echo})}
 function persist(){store.set({cfg,score,game:{...JSON.parse(snapshot()),hist:G.hist}})}
+function skipCascade(){
+  cascadeUntil=0;
+  clearFx();
+  document.querySelectorAll('.cell,.cell .mark,.cap').forEach(el=>el.style.animationDelay='');
+  render();
+}
 function tap(b,i){
+  if(Date.now()<cascadeUntil){skipCascade();return} // first tap during a cascade just fast-forwards it
   if(window.Online&&Online.tap(b,i))return;
   if(G.winner)return;
   if(cfg.mode==='cpu'&&G.turn==='O')return;
