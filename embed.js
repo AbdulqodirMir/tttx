@@ -31,6 +31,10 @@ const auth=getAuth(app);
 const db=getDatabase(app);
 const me=(await signInAnonymously(auth)).user;
 
+// server clock offset for sane invite expiry across skewed devices
+let tOff=0;
+onValue(ref(db,'.info/serverTimeOffset'),s=>{tOff=s.val()||0});
+
 // ---- presence: appear online in the TTTX lobby ----
 const p=ref(db,'presence/'+me.uid);
 const beat=()=>set(p,{nick:myNick,ts:serverTimestamp(),hide:false,room:null,site});
@@ -60,7 +64,7 @@ function ask(fromNick,accept,decline){
 
 // ---- invites: get pinged from the TTTX lobby ----
 onValue(ref(db,'invites/'+me.uid),snap=>{
-  const v=snap.val()||{},now=Date.now();
+  const v=snap.val()||{},now=Date.now()+tOff;
   for(const[k,iv]of Object.entries(v)){
     if(!iv||iv.status!=='pending'||!iv.ts||now-iv.ts>60000)continue;
     if(iv._shown)continue;iv._shown=true;
