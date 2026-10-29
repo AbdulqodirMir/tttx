@@ -92,6 +92,8 @@ main{width:100%;max-width:560px;display:flex;align-items:center;justify-content:
 .cell.echo svg{width:58%;height:58%;opacity:.55}
 .cell.echo:has(.mx){background:rgba(139,156,255,.09);box-shadow:inset 0 0 0 1.5px rgba(139,156,255,.5)}
 .cell.echo:has(.mo){background:rgba(255,93,143,.09);box-shadow:inset 0 0 0 1.5px rgba(255,93,143,.5)}
+.cell.echo.pre:has(.mx){background:var(--cell);box-shadow:none}
+.cell.echo.pre:has(.mo){background:var(--cell);box-shadow:none}
 @keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
 #big.free .box.live.pX{border-color:rgba(139,156,255,.6);box-shadow:0 0 10px -5px var(--x)}
 #big.free .box.live.pO{border-color:rgba(255,93,143,.6);box-shadow:0 0 10px -5px var(--o)}
@@ -375,7 +377,7 @@ function applyEchoes(g,pos,base0){
     for(let b=0;b<9;b++){
       if(g.owner[b])continue;const r=evalBox(g,b);
       if(r){g.owner[b]=r;if(r!=='D'){next.push(b);if(g.lastChainCaps)g.lastChainCaps.push([b,capTime]);
-        if(g.lastChainGlow&&effRule()==='line'){const c=g.cells[b];const L=LINES.find(l=>c[l[0]]&&c[l[0]]===c[l[1]]&&c[l[1]]===c[l[2]]);if(L)g.lastChainGlow.push([b,L,glowTime,r])}}}
+        if(g.lastChainGlow&&effRule()==='line'){const c=g.cells[b];const L=LINES.find(l=>c[l[0]]&&c[l[0]]===c[l[1]]&&c[l[1]]===c[l[2]]);if(L)g.lastChainGlow.push([b,L,glowTime,r,capTime])}}}
     }
     base=next.length?capTime+T.popDur:capTime; // next wave starts after the captured box finishes flipping
     frontier=next;
@@ -408,7 +410,7 @@ function play(g,b,i){
   let captured=false;g._cascEnd=0;
   if(r&&!g.owner[b]){g.owner[b]=r;if(r!=='D'){captured=true;g.lastEchoes=[];g.lastChainCaps=[];g.lastChainGlow=[];g.lastChainSrc=[];
     const T=pace(),dGlow=T.start+T.beat,dCap=dGlow+T.glowHold;
-    if(cfg.rule==='line'){const c=g.cells[b];const L=LINES.find(l=>c[l[0]]&&c[l[0]]===c[l[1]]&&c[l[1]]===c[l[2]]);if(L)g.lastChainGlow.push([b,L,dGlow,r])}
+    if(cfg.rule==='line'){const c=g.cells[b];const L=LINES.find(l=>c[l[0]]&&c[l[0]]===c[l[1]]&&c[l[1]]===c[l[2]]);if(L)g.lastChainGlow.push([b,L,dGlow,r,dCap])}
     g.lastChainCaps.push([b,dCap]);
     applyEchoes(g,b,dCap+T.popDur);
     g._cascEnd=Math.max.apply(null,g.lastChainCaps.map(m=>m[1]))+T.popDur;
@@ -472,6 +474,7 @@ function clearFx(){
   document.querySelectorAll('.cell.wgX,.cell.wgO').forEach(el=>el.classList.remove('wgX','wgO'));
   document.querySelectorAll('.box.opnX,.box.opnO').forEach(el=>el.classList.remove('opnX','opnO'));
   document.querySelectorAll('.cell.rip').forEach(el=>el.classList.remove('rip'));
+  document.querySelectorAll('.cell.pre').forEach(el=>el.classList.remove('pre'));
 }
 function render(){
   clearFx();
@@ -484,7 +487,8 @@ function render(){
   const cascMs=(G.lastChainCaps&&G.lastChainCaps.length)?Math.max.apply(null,G.lastChainCaps.map(m=>m[1]))+pace().popDur+150:0;
   if(cascMs>0){cascadeUntil=Date.now()+cascMs;clearTimeout(cascTimer);cascTimer=setTimeout(()=>{cascadeUntil=0;render()},cascMs+30)}
   const cascading=Date.now()<cascadeUntil;
-  bigEl.classList.toggle('free',!over&&(G.target<0||boxDone(G,G.target)));
+  const pendCaps=new Set((G.lastChainCaps||[]).map(m=>m[0])); // boxes whose capture flip is still scheduled: no early blank/border
+  bigEl.classList.toggle('free',!over&&!cascading&&(G.target<0||boxDone(G,G.target)));
   // focus zoom mosaic (mobile only): target track grows 1.7x, every box stays a centered square in its track
   const foc=!over&&!cascading&&G.target>=0&&!boxDone(G,G.target)?G.target:-1;
   const fr=foc>=0?foc/3|0:-1,fc=foc>=0?foc%3:-1;
@@ -504,9 +508,9 @@ function render(){
     const b=+box.dataset.b;
     box.className='box'+(!over&&!cascading&&liveBoxes.has(b)?' live p'+G.turn:'')+(!over&&!cascading&&!liveBoxes.has(b)&&!G.owner[b]?' dim':'');
     const cap=box.querySelector('.cap');
-    if(G.winner&&G.winner!=='D'){const L=LINES.find(l=>l.every(k=>G.owner[k]===G.winner));box.classList.toggle('wl',!!L&&L.includes(b))}
+    if(!cascading&&G.winner&&G.winner!=='D'){const L=LINES.find(l=>l.every(k=>G.owner[k]===G.winner));box.classList.toggle('wl',!!L&&L.includes(b))}
     const o=G.owner[b],osig=o||'';
-    if(cap.dataset.o!==osig){cap.dataset.o=osig;cap.className='cap'+(o?' show '+(o==='D'?'D':'W '+o):'');cap.innerHTML=o==='D'?'<span class="t">–</span>':svgOf(o)}
+    if(!pendCaps.has(b)&&cap.dataset.o!==osig){cap.dataset.o=osig;cap.className='cap'+(o?' show '+(o==='D'?'D':'W '+o):'');cap.innerHTML=o==='D'?'<span class="t">–</span>':svgOf(o)}
     box.querySelectorAll('.cell').forEach(c=>{
       const i=+c.dataset.i,v=G.cells[b][i];
       const sig=v||'';
@@ -543,10 +547,10 @@ function render(){
     }
   }
   if(G.lastEchoes&&G.lastEchoes.length){
-    capSay('echo marks land in every open box',Math.max(0,G.lastEchoes[0][2]-360));
+    capSay('echo marks land in every open box',Math.max(0,G.lastEchoes[0][2]));
     G.lastEchoes.forEach(m=>{
       const cell=document.querySelector('.cell[data-b="'+m[0]+'"][data-i="'+m[1]+'"]');
-      if(cell){cell.style.animationDelay=m[2]+'ms';const el=cell.querySelector('.mark');if(el)el.style.animationDelay=m[2]+'ms'}
+      if(cell){cell.classList.add('pre');cell.style.animationDelay=m[2]+'ms';const el=cell.querySelector('.mark');if(el)el.style.animationDelay=m[2]+'ms';fxTimers.push(setTimeout(()=>cell.classList.remove('pre'),m[2]))}
       const src=document.querySelector('.box[data-b="'+m[1]+'"]');
       const dst=document.querySelector('.cell[data-b="'+m[0]+'"][data-i="'+m[1]+'"]');
       fly(src,dst,G.cells[m[0]][m[1]]||G.turn,m[2]);
@@ -555,14 +559,17 @@ function render(){
   }
   if(G.lastChainCaps&&G.lastChainCaps.length){
     G.lastChainCaps.forEach(m=>{
-      const cap=document.querySelector('.box[data-b="'+m[0]+'"] .cap');
-      if(cap)cap.style.animationDelay=m[1]+'ms';
+      fxTimers.push(setTimeout(()=>{
+        const cap=document.querySelector('.box[data-b="'+m[0]+'"] .cap');
+        const o=G.owner[m[0]];
+        if(cap&&o){cap.dataset.o=o;cap.className='cap show '+(o==='D'?'D':'W '+o);cap.innerHTML=o==='D'?'<span class="t">–</span>':svgOf(o)}
+      },m[1]));
     });
     G.lastChainCaps=null;
   }
   if(G.lastChainGlow&&G.lastChainGlow.length){
     G.lastChainGlow.forEach((m,ci)=>{
-      capSay(ci===0?(m[3]+' captured '+BNAMES[m[0]]):('chain x'+(ci+1)+' - '+m[3]+' captured '+BNAMES[m[0]]),m[2]);
+      capSay(ci===0?(m[3]+' captured '+BNAMES[m[0]]):('chain x'+(ci+1)+' - '+m[3]+' captured '+BNAMES[m[0]]),m[4]);
       m[1].forEach(i=>{
         const el=document.querySelector('.cell[data-b="'+m[0]+'"][data-i="'+i+'"]');
         if(el){el.classList.add('wg'+m[3]);el.style.animationDelay=m[2]+'ms';fxTimers.push(setTimeout(()=>{el.classList.remove('wg'+m[3]);el.style.animationDelay=''},m[2]+780))}
@@ -652,7 +659,7 @@ function move(b,i){
   G.redo=[];
   play(G,b,i);
   const afterOpp=oppMap(G);
-  const od=G.lastEchoes&&G.lastEchoes.length?Math.max.apply(null,G.lastEchoes.map(e=>e[2]))+240:0;
+  const od=G._cascEnd?G._cascEnd+200:(G.lastEchoes&&G.lastEchoes.length?Math.max.apply(null,G.lastEchoes.map(e=>e[2]))+240:0);
   G.lastOpps=null;
   for(const b in afterOpp)if(beforeOpp[b]!==afterOpp[b]){(G.lastOpps=G.lastOpps||[]).push([+b,afterOpp[b],od])}
   if(G.winner)record();
@@ -916,3 +923,4 @@ window.__tttx={get G(){return G},setOnlineRule(r){onlineRule=r||null},effRule:()
 <script type="module" src="/online.js"></script>
 </body>
 </html>
+
