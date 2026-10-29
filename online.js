@@ -121,7 +121,7 @@ function applyServerState(v,fresh){
   const a=v.anim;
   if(a&&v.lastMoveBy!==me.uid){const g=T().G;g.lastEchoes=a.echoes||null;g.lastChainCaps=a.caps||null;g.lastChainGlow=a.glow||null;g.lastOpps=a.opps||null}
   T().render();
-  if(v.state.winner)setTimeout(()=>T().showOver(),650);
+  if(v.state.winner)setTimeout(()=>T().showOver(),(T().overDelay||function(){return 650})());
   else if($('#over').open)$('#over').close();
 }
 // Force the local board to the server truth (reconnect, failed/aborted move).
