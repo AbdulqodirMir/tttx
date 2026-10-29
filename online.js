@@ -420,7 +420,7 @@ async function boot(){
   mn.style.cursor='text';mn.title='Tap to edit';
   mn.onclick=()=>{
     if(mn.dataset.editing)return;mn.dataset.editing='1';
-    rs.textContent='\u2713';rs.title='Save name';
+    rs.textContent='Save name';rs.title='Save name';rs.setAttribute('aria-label','Save name');
     const inp=document.createElement('input');
     inp.value=myNick;inp.maxLength=16;inp.id='mynickedit';
     inp.style.cssText='font:inherit;font-weight:700;background:#0a0d15;border:1px solid var(--line);border-radius:8px;padding:2px 8px;width:10em;color:var(--txt);margin:0 6px 0 2px;vertical-align:middle';
@@ -429,7 +429,7 @@ async function boot(){
       if(!mn.dataset.editing)return;
       const v=inp.value.trim().slice(0,16);
       inp.replaceWith(mn);delete mn.dataset.editing;
-      rs.textContent='\u21bb';rs.title='';rs.onclick=doReshuffle;
+      rs.textContent='Random name';rs.title='Generate a random player name';rs.setAttribute('aria-label','Generate a random player name');rs.onclick=doReshuffle;
       if(ok&&v){window.__nickSavedAt=Date.now();myNick=v;localStorage.setItem('tttx-nick',myNick);presenceOn()}
       mn.textContent=myNick;
     };
