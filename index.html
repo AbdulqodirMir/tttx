@@ -299,6 +299,20 @@ footer a:hover{opacity:.7}
   #rlinkrow{flex-wrap:wrap}
   #rlink{flex:1 1 100%}
 }
+/* PHONE: spread content down full height - gap under top bar, board sits lower, actions pushed down */
+@media (max-width:640px){
+  body{min-height:100svh}
+  #status{margin-top:clamp(24px,5.5svh,48px)}
+  main{padding:2px 5px 6px}
+  .pillrow{margin-top:clamp(24px,6.5svh,56px);flex-wrap:nowrap;gap:8px}
+  .pillrow button{padding:12px 12px;font-size:13px}
+  #capline{display:none}
+  /* invite banner up: relax the spread so the banner stays fully on screen */
+  body:has(#waitbar.on) #status{margin-top:0}
+  body:has(#waitbar.on) .pillrow{margin-top:2px}
+  body:has(#waitbar.on) #waitbar{margin:4px 12px 6px}
+  body:has(#waitbar.on) #hintrow{display:none}
+}
 </style>
 </head>
 <body>
