@@ -149,9 +149,8 @@ label.t{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(-
 #toast button.ok{background:rgba(255,93,143,.16);border-color:rgba(255,93,143,.55)}
 #obar{width:100%;max-width:560px;padding:8px 14px;display:none;align-items:center;gap:10px;font-size:13px;color:var(--tx);box-sizing:border-box}
 #obar button{margin-left:auto;padding:5px 12px;font-size:12px}
-#waitbar{position:fixed;inset:auto;margin:0;bottom:calc(64px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:min(560px,92vw);max-width:92vw;padding:9px 14px;align-items:center;gap:10px;font-size:13px;color:var(--tx);background:rgba(139,156,255,.08);border:1px solid rgba(139,156,255,.35);border-radius:14px;margin:0 0 8px;box-sizing:border-box}
-#waitbar:popover-open{display:flex}
-#waitbar:not(:popover-open){display:none}
+#waitbar{display:none;position:fixed;inset:auto;margin:0;bottom:calc(64px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:min(560px,92vw);max-width:92vw;padding:9px 14px;align-items:center;gap:10px;font-size:13px;color:var(--tx);background:rgba(5,6,15,.92);border:1px solid rgba(139,156,255,.35);border-radius:14px;margin:0 0 8px;box-sizing:border-box}
+#waitbar.on{display:flex}
 #waitbar button{margin-left:auto;padding:6px 12px;font-size:13px;font-weight:600}
 #waitbar button.ghost{margin-left:0;background:none;font-weight:400}
 #plist{display:flex;flex-direction:column;gap:8px;margin:8px 0}
@@ -177,6 +176,12 @@ html{scrollbar-width:thin;scrollbar-color:rgba(139,156,255,.35) transparent}
 ::-webkit-scrollbar-track{background:transparent}
 @media (max-width:640px){
   .brand{font-size:19px}
+  header{flex-wrap:wrap;row-gap:6px;padding:12px 12px 2px}
+  .hchips{flex:1 1 100%;justify-content:space-between;gap:5px}
+  .hchip{padding:6px 9px;font-size:12.5px;gap:5px}
+  #waitbar{position:static;transform:none;width:auto;max-width:none;margin:8px 12px 12px;flex-wrap:wrap;row-gap:8px} /* in-flow on phones: it can never cover content */
+  #waitbar>span{flex:1 1 100%}
+  #waitbar button{margin-left:0;flex:1 1 auto;padding:8px 10px}
   .hchip{padding:6px 10px;font-size:12px}
   header{padding:12px 12px 2px}
   #big{gap:10px;width:min(100%,calc(100svh - 236px))}
@@ -234,7 +239,7 @@ html{scrollbar-width:thin;scrollbar-color:rgba(139,156,255,.35) transparent}
 <dialog id="over"><div class="big" id="overTxt"></div><p id="overSub"></p><button id="share" class="solid" style="width:100%;padding:13px 16px;font-size:15px;margin-top:8px">Share result</button><div class="row" style="justify-content:center"><button id="again" class="acc">Play again</button><button id="view">View board</button></div></dialog>
 
 <div id="obar"><span class="dot"></span><span id="oseat"></span><span id="onick"></span><button id="leave">Leave</button></div>
-<div id="waitbar" popover="manual"><span>Room ready - send this link, then stay on this page</span><button id="waitcopy">Copy link</button><button id="waitshare" class="ghost" style="display:none">Share</button><button id="waitcancel" class="ghost" style="display:none">Cancel invite</button></div>
+<div id="waitbar"><span>Room ready - send this link, then stay on this page</span><button id="waitcopy">Copy link</button><button id="waitshare" class="ghost" style="display:none">Share</button><button id="waitcancel" class="ghost" style="display:none">Cancel invite</button></div>
 <div id="toast" popover="manual"></div>
 <dialog id="lobby">
   <h2>Play <em>online</em></h2>
@@ -580,7 +585,26 @@ function syncSeg(){
     document.querySelectorAll('#'+id+' button').forEach(b=>b.classList.toggle('on',b.dataset.v===cfg[k]));
 }
 for(const[id,k]of[['segMode','mode'],['segRule','rule'],['segFirst','first'],['segSpeed','speed']])
-  document.querySelectorAll('#'+id+' button').forEach(b=>b.onclick=()=>{cfg[k]=b.dataset.v;syncSeg();persist()});
+  document.querySelectorAll('#'+id+' button').forEach(b=>b.onclick=()=>{
+    const v=b.dataset.v;
+    if(cfg[k]===v){syncSeg();return} // already selected: never touch the running game
+    if(k==='mode'){ // the opponent setting applies right away - never saved-but-ignored
+      const wasOnline=window.Online&&Online.active();
+      if(wasOnline){
+        const playing=!(Online.waiting&&Online.waiting());
+        if(playing&&!confirm('Leave the online game and switch to '+(v==='2p'?'local 2-player':'vs CPU')+'?')){syncSeg();return}
+        cfg.mode=v;syncSeg();persist();
+        Online.leave(); // room cleanup + fresh local board under the new mode
+      }else{
+        cfg.mode=v;syncSeg();persist();
+        clearTimeout(cpuTimer);newGame(); // board restarts in the chosen mode, scores kept
+      }
+      sToast(v==='2p'?'Local 2-player game':'Playing vs CPU');
+      return;
+    }
+    cfg[k]=v;syncSeg();persist();
+    if(k==='rule')render(); // box badges/lines reflect the new capture rule at once
+  });
 for(const d of['dlg','over','lobby']){const el=$('#'+d);el.addEventListener('click',e=>{if(e.target===el&&!document.querySelector('#mynickedit'))el.close()})}
 $('#menu').onclick=()=>{syncSeg();$('#dlg').showModal()};
 $('#playbtn').onclick=()=>$('#online').click();
@@ -612,7 +636,7 @@ $('#redo').onclick=()=>{
 $('#chip').onclick=()=>{if(G.winner)showOver()};
 build();
 if(saved.game&&saved.game.cells){G=saved.game;G.hist=G.hist||[];G.redo=[];G.maxChain=G.maxChain||0;if(!G.echo)G.echo=Array.from({length:9},()=>Array(9).fill(0));}else G=fresh();
-render();maybeCpu();
+syncSeg();render();maybeCpu();
 
 // --- share result card (canvas -> PNG, Web Share API with download+copy fallback) ---
 const SHARE_URL='https://tttx.miraliyev.tech/';
