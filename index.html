@@ -30,8 +30,8 @@
 <style>
 :root{--ink:#05060f;--tx:#f5f3ee;--dim:#aaa7bb;--line:rgba(245,243,238,.13);--glass:rgba(245,243,238,.05);--cell:rgba(245,243,238,.09);--x:#8b9cff;--o:#ff5d8f;--draw:#5a5f75;--r1:10px;--r2:20px;--e:cubic-bezier(.2,.8,.2,1)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html{background:var(--ink)}
-body{margin:0;min-height:100%;color:var(--tx);font-family:"Bricolage Grotesque","Onest",system-ui,sans-serif;overscroll-behavior:none}
+html{background:var(--ink);overflow-x:clip}
+body{margin:0;min-height:100%;overflow-x:clip;color:var(--tx);font-family:"Bricolage Grotesque","Onest",system-ui,sans-serif;overscroll-behavior:none}
 body{display:flex;flex-direction:column;align-items:center;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
 .aurora{position:fixed;inset:0;background:radial-gradient(90% 70% at 70% 30%,#141a55,#05060f 70%);z-index:-2}
 .stars{position:fixed;inset:0;z-index:-1;background-image:radial-gradient(1px 1px at 12% 30%,#fff8,transparent),radial-gradient(1px 1px at 32% 70%,#fff5,transparent),radial-gradient(1.5px 1.5px at 55% 15%,#fff6,transparent),radial-gradient(1px 1px at 78% 45%,#fff5,transparent),radial-gradient(1px 1px at 90% 80%,#fff6,transparent),radial-gradient(1.5px 1.5px at 45% 88%,#fff5,transparent)}
@@ -65,7 +65,7 @@ button.solid{background:var(--o);border-color:var(--o);color:#20050f;font-weight
 .pl b{font-weight:700}
 .pl .num{font-weight:700;font-size:16px;color:var(--tx);font-variant-numeric:tabular-nums}
 .mX{color:var(--x)}.mO{color:var(--o)}
-.pl.me{border-bottom:2px solid rgba(139,156,255,.55);border-radius:3px;padding-bottom:2px}
+.pl.me{border-bottom:none}
 #nmX.ed,#nmO.ed{cursor:text;border-bottom:1px dashed var(--dim);padding-bottom:1px}
 #plO.me::after{color:var(--o);border-color:rgba(255,93,143,.4)}
 .sepdot{color:var(--dim)}
@@ -80,8 +80,8 @@ main{width:100%;max-width:560px;display:flex;align-items:center;justify-content:
 #big{width:min(100%,calc(100svh - 330px));min-width:min(100%,300px);aspect-ratio:1;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:12px;margin:0 auto}
 #big.olock .box{opacity:.5}
 .box{position:relative;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:7px;padding:11px;background:var(--glass);border:1.5px solid var(--line);border-radius:var(--r2);backdrop-filter:blur(8px);transition:.2s;min-height:0}
-.box.live{border-color:rgba(139,156,255,.75);box-shadow:0 0 34px rgba(139,156,255,.25),inset 0 0 22px rgba(139,156,255,.08);background:rgba(139,156,255,.07)}
-.box.live.pO{border-color:rgba(255,93,143,.75);box-shadow:0 0 34px rgba(255,93,143,.25),inset 0 0 22px rgba(255,93,143,.08);background:rgba(255,93,143,.07)}
+.box.live{border-color:rgba(139,156,255,.7);box-shadow:0 0 20px rgba(139,156,255,.15),inset 0 0 14px rgba(139,156,255,.05);background:rgba(139,156,255,.04)}
+.box.live.pO{border-color:rgba(255,93,143,.7);box-shadow:0 0 20px rgba(255,93,143,.15),inset 0 0 14px rgba(255,93,143,.05);background:rgba(255,93,143,.04)}
 .box.dim{opacity:.45}
 .box.wl{border-color:#fff;box-shadow:0 0 0 1px #ffffff55,0 0 22px -4px #ffffff66}
 .cell{border:0;border-radius:var(--r1);background:var(--cell);display:flex;align-items:center;justify-content:center;aspect-ratio:1;min-width:0;min-height:0;padding:0;backdrop-filter:none}
@@ -102,12 +102,34 @@ main{width:100%;max-width:560px;display:flex;align-items:center;justify-content:
 .cell.echo:has(.mo){background:rgba(255,93,143,.09);box-shadow:inset 0 0 0 1.5px rgba(255,93,143,.5)}
 .cell.echo.pre:has(.mx){background:var(--cell);box-shadow:none}
 .cell.echo.pre:has(.mo){background:var(--cell);box-shadow:none}
-@keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
+
 #big.free .box.live.pX{border-color:rgba(139,156,255,.6);box-shadow:0 0 10px -5px var(--x)}
 #big.free .box.live.pO{border-color:rgba(255,93,143,.6);box-shadow:0 0 10px -5px var(--o)}
-#big.free .box.live::after{content:'';position:absolute;top:8px;right:8px;width:7px;height:7px;border-radius:50%;animation:pulse 1.6s ease-in-out infinite}
-#big.free .box.live.pX::after{background:var(--x)}
-#big.free .box.live.pO::after{background:var(--o)}
+/* glow wave: a hairline of turn-coloured light travels each playable box border.
+   Only the gradient angle animates; 10s lap, 1px beam, 3px faint halo. */
+@property --gw-ang{syntax:'<angle>';inherits:false;initial-value:0deg}
+#big.free .box.live{--gw-hot:rgba(245,243,238,.85);--gw-soft:rgba(245,243,238,.25)}
+#big.free .box.live.pX{--gw-hot:rgba(139,156,255,.9);--gw-soft:rgba(139,156,255,.28)}
+#big.free .box.live.pO{--gw-hot:rgba(255,93,143,.9);--gw-soft:rgba(255,93,143,.28)}
+#big.free .box.live::before,#big.free .box.live::after{
+  content:'';position:absolute;pointer-events:none;
+  background:conic-gradient(from var(--gw-ang),transparent 0 312deg,var(--gw-soft) 330deg,var(--gw-hot) 345deg,var(--gw-soft) 355deg,transparent 360deg);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;
+  animation:gwspin 10s linear infinite;
+}
+#big.free .box.live::before{inset:-4px;padding:3px;opacity:.18;border-radius:calc(var(--r2) + 4px)}
+#big.free .box.live::after{inset:-1.5px;padding:1px;opacity:.9;border-radius:calc(var(--r2) + 1.5px)}
+@keyframes gwspin{to{--gw-ang:360deg}}
+/* phase-stagger along the diagonals so the light sweeps top-left to bottom-right as one slow flow */
+#big.free .box.live:nth-child(1){animation-delay:0s}
+#big.free .box.live:nth-child(2){animation-delay:-.5s}
+#big.free .box.live:nth-child(3){animation-delay:-1s}
+#big.free .box.live:nth-child(4){animation-delay:-.5s}
+#big.free .box.live:nth-child(5){animation-delay:-1s}
+#big.free .box.live:nth-child(6){animation-delay:-1.5s}
+#big.free .box.live:nth-child(7){animation-delay:-1s}
+#big.free .box.live:nth-child(8){animation-delay:-1.5s}
+#big.free .box.live:nth-child(9){animation-delay:-2s}
 #big.free .box.dim{opacity:.6}
 .cell.wgX{animation:wglX 1s ease-out backwards}
 .cell.wgO{animation:wglO 1s ease-out backwards}
@@ -211,8 +233,8 @@ footer a:hover{opacity:.7}
 .cell{position:relative}
 #big:not(.free) .box.live.pX{animation:breatheX 2.4s ease-in-out infinite}
 #big:not(.free) .box.live.pO{animation:breatheO 2.4s ease-in-out infinite}
-@keyframes breatheX{0%,100%{box-shadow:0 0 26px rgba(139,156,255,.18),inset 0 0 18px rgba(139,156,255,.07)}50%{box-shadow:0 0 46px rgba(139,156,255,.42),inset 0 0 26px rgba(139,156,255,.14)}}
-@keyframes breatheO{0%,100%{box-shadow:0 0 26px rgba(255,93,143,.18),inset 0 0 18px rgba(255,93,143,.07)}50%{box-shadow:0 0 46px rgba(255,93,143,.42),inset 0 0 26px rgba(255,93,143,.14)}}
+@keyframes breatheX{0%,100%{box-shadow:0 0 16px rgba(139,156,255,.11),inset 0 0 12px rgba(139,156,255,.04)}50%{box-shadow:0 0 28px rgba(139,156,255,.24),inset 0 0 16px rgba(139,156,255,.08)}}
+@keyframes breatheO{0%,100%{box-shadow:0 0 16px rgba(255,93,143,.11),inset 0 0 12px rgba(255,93,143,.04)}50%{box-shadow:0 0 28px rgba(255,93,143,.24),inset 0 0 16px rgba(255,93,143,.08)}}
 .cell.last{outline:1.5px solid rgba(245,243,238,.55);outline-offset:-1.5px}
 .cell.last:has(.mx){outline-color:rgba(139,156,255,.85)}
 .cell.last:has(.mo){outline-color:rgba(255,93,143,.85)}
@@ -242,6 +264,7 @@ footer a:hover{opacity:.7}
 @media (prefers-reduced-motion:reduce){
   header,#status,main,.pillrow,#hintrow,footer,dialog[open]{animation:none}
   #big .box{transition:none}
+  #big.free .box.live::before,#big.free .box.live::after{animation:none;opacity:0}
   #big:not(.free) .box.live.pX,#big:not(.free) .box.live.pO{animation:none}
   .cell.rip::after{content:none;animation:none}
   .cap.W::after{content:none;animation:none}
@@ -323,9 +346,6 @@ footer a:hover{opacity:.7}
 <div id="obar"><span class="dot"></span><span id="oseat"></span><span id="onick"></span><button id="leave">Leave</button></div>
 <div id="waitbar"><span>Room ready - send this link, then stay on this page</span><button id="waitcopy">Copy link</button><button id="waitshare" class="ghost" style="display:none">Share</button><button id="waitcancel" class="ghost" style="display:none">Cancel invite</button></div>
 <div id="toast" popover="manual"></div>
-<footer>
-  <span class="fq">Built by <a href="https://miraliyev.tech">Abdulqodir Miraliyev</a></span>
-</footer>
 
 <dialog id="lobby">
   <h2>Play <em>online</em></h2>
