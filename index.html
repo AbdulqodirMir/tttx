@@ -911,11 +911,11 @@ async function shareResult(){
   const btn=$('#share');btn.disabled=true;
   try{
     const blob=await makeCardBlob();
-    const d=cardData();
-    const txt=(d.w==='D'?'Draw':d.nm[d.w]+' wins')+' \u00b7 TicTacToe Extended '+SHARE_URL;
     const file=new File([blob],'tttx-result.jpg',{type:'image/jpeg'});
+    // one item only: the card image already carries result + tttx.miraliyev.tech.
+    // adding text/title makes macOS expose a second share item (Copy pastes 2 images).
     if(navigator.canShare&&navigator.canShare({files:[file]})){
-      try{await navigator.share({files:[file],title:'TicTacToe Extended',text:txt});btn.disabled=false;sharing=false;return}
+      try{await navigator.share({files:[file]});btn.disabled=false;sharing=false;return}
       catch(e){if(e&&e.name==='AbortError'){btn.disabled=false;sharing=false;return}}
     }
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='tttx-result.jpg';document.body.appendChild(a);a.click();a.remove();
