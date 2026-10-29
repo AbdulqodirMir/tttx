@@ -249,6 +249,8 @@ const score=Object.assign({X:0,O:0,D:0},saved.score||{});
 if(cfg.v!==2){cfg.rule='line';cfg.v=2;store.set({cfg,score,game:saved.game})}
 let G; // state
 const other=p=>p==='X'?'O':'X';
+let onlineRule=null; // online rooms pin the host's rule
+const effRule=()=>onlineRule||cfg.rule;
 
 function fresh(){return{cells:Array.from({length:9},()=>Array(9).fill('')),owner:Array(9).fill(''),turn:cfg.first,target:-1,winner:'',hist:[],last:null,echo:Array.from({length:9},()=>Array(9).fill(0))}}
 function boxFull(g,b){return g.cells[b].every(Boolean)}
@@ -270,7 +272,7 @@ function deadGame(g){
 function lineWinner(arr){for(const[a,b,c]of LINES)if(arr[a]&&arr[a]!=='D'&&arr[a]===arr[b]&&arr[b]===arr[c])return arr[a];return''}
 function evalBox(g,b){
   const c=g.cells[b];
-  if(cfg.rule==='line'){const w=lineWinner(c);if(w)return w;return boxFull(g,b)?'D':''}
+  if(effRule()==='line'){const w=lineWinner(c);if(w)return w;return boxFull(g,b)?'D':''}
   if(!boxFull(g,b))return'';
   const x=c.filter(v=>v==='X').length,o=9-x;return x>o?'X':o>x?'O':'D';
 }
@@ -301,7 +303,7 @@ function applyEchoes(g,pos,base0){
     for(let b=0;b<9;b++){
       if(g.owner[b])continue;const r=evalBox(g,b);
       if(r){g.owner[b]=r;if(r!=='D'){next.push(b);if(g.lastChainCaps)g.lastChainCaps.push([b,capTime]);
-        if(g.lastChainGlow&&cfg.rule==='line'){const c=g.cells[b];const L=LINES.find(l=>c[l[0]]&&c[l[0]]===c[l[1]]&&c[l[1]]===c[l[2]]);if(L)g.lastChainGlow.push([b,L,glowTime,r])}}}
+        if(g.lastChainGlow&&effRule()==='line'){const c=g.cells[b];const L=LINES.find(l=>c[l[0]]&&c[l[0]]===c[l[1]]&&c[l[1]]===c[l[2]]);if(L)g.lastChainGlow.push([b,L,glowTime,r])}}}
     }
     base=next.length?capTime+T.popDur:capTime; // next wave starts after the captured box finishes flipping
     frontier=next;
@@ -395,6 +397,7 @@ function clearFx(){
 }
 function render(){
   clearFx();
+  const onl=!!(window.Online&&Online.active());
   const moves=legal(G),ok=new Set(moves.map(m=>m[0]+'-'+m[1]));
   const liveBoxes=new Set(moves.map(m=>m[0]));
   const over=!!G.winner;
@@ -413,7 +416,7 @@ function render(){
       c.classList.toggle('echo',!!(G.echo&&G.echo[b]&&G.echo[b][i]));
       c.classList.toggle('can',!over&&ok.has(b+'-'+i));
       c.classList.toggle('last',!!G.last&&G.last[0]===b&&G.last[1]===i);
-      c.disabled=over||(cfg.mode==='cpu'&&G.turn==='O');
+      c.disabled=over||(!onl&&cfg.mode==='cpu'&&G.turn==='O');
     });
   });
   if(G.lastEchoes&&G.lastEchoes.length){
@@ -456,7 +459,6 @@ function render(){
   $('#hint').textContent=over?'':G.target<0?'Play anywhere':free?'Target box is closed. Play any open box.':'Play in the glowing box';
   $('#scX').textContent=score.X;$('#scO').textContent=score.O;
   $('#score').textContent=score.D?('draws '+score.D):'';
-  const onl=!!(window.Online&&Online.active());
   let nm=cfg.mode==='cpu'?{X:'You',O:'CPU'}:{X:'Player X',O:'Player O'};
   if(onl){const n=Online.names&&Online.names();if(n)nm={X:n.X||'\u2026',O:n.O||'\u2026'}}
   $('#nmX').textContent=nm.X;$('#nmO').textContent=nm.O;
@@ -580,7 +582,7 @@ $('#undo').onclick=()=>{
 build();
 if(saved.game&&saved.game.cells){G=saved.game;G.hist=G.hist||[];if(!G.echo)G.echo=Array.from({length:9},()=>Array(9).fill(0));}else G=fresh();
 render();maybeCpu();
-window.__tttx={get G(){return G},deadGame:()=>deadGame(G),mkIco,setG(o){G=o},cfg,score,play:tap,move,badTap,warn,legal:()=>legal(G),oppMap:()=>oppMap(G),pace,render,persist,fresh:()=>{newGame()},localNew:newGame,showOver};
+window.__tttx={get G(){return G},setOnlineRule(r){onlineRule=r||null},effRule:()=>effRule(),effRule:()=>effRule(),deadGame:()=>deadGame(G),mkIco,setG(o){G=o},cfg,score,play:tap,move,badTap,warn,legal:()=>legal(G),oppMap:()=>oppMap(G),pace,render,persist,fresh:()=>{newGame()},localNew:newGame,showOver};
 </script>
 <script type="module" src="online.js"></script>
 </body>
