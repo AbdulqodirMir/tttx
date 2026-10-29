@@ -444,6 +444,7 @@ const mkIco=v=>'<span class="mk">'+svgOf(v)+'</span>';
 let fxTimers=[];
 let shownLast='';
 let cascadeUntil=0; // while the capture cascade plays, a board tap skips to the end
+let cascTimer=0; // end-of-cascade reveal: not in fxTimers so mid-cascade renders can't clear it
 const BNAMES=['top-left','top-center','top-right','middle-left','center','middle-right','bottom-left','bottom-center','bottom-right'];
 function capSay(txt,at){fxTimers.push(setTimeout(()=>{const c=$('#capline');c.querySelector('span').textContent=txt;c.classList.add('on')},at));fxTimers.push(setTimeout(()=>{$('#capline').classList.remove('on')},at+1700))}
 function fly(srcEl,dstEl,pl,at){
@@ -476,10 +477,14 @@ function render(){
   const moves=legal(G),ok=new Set(moves.map(m=>m[0]+'-'+m[1]));
   const liveBoxes=new Set(moves.map(m=>m[0]));
   const over=!!G.winner;
-  bigEl.classList.toggle('free',!over&&(G.target<0||boxDone(G,G.target)));
+  // while a capture cascade is still playing, next-turn cues stay hidden; a timer reveals them at the end
+  const cascMs=(G.lastChainCaps&&G.lastChainCaps.length)?Math.max.apply(null,G.lastChainCaps.map(m=>m[1]))+pace().popDur+150:0;
+  if(cascMs>0){cascadeUntil=Date.now()+cascMs;clearTimeout(cascTimer);cascTimer=setTimeout(()=>{cascadeUntil=0;render()},cascMs+30)}
+  const cascading=Date.now()<cascadeUntil;
+  bigEl.classList.toggle('free',!over&&!cascading&&(G.target<0||boxDone(G,G.target)));
   document.querySelectorAll('.box').forEach(box=>{
     const b=+box.dataset.b;
-    box.className='box'+(!over&&liveBoxes.has(b)?' live p'+G.turn:'')+(!over&&!liveBoxes.has(b)&&!G.owner[b]?' dim':'');
+    box.className='box'+(!over&&!cascading&&liveBoxes.has(b)?' live p'+G.turn:'')+(!over&&!cascading&&!liveBoxes.has(b)&&!G.owner[b]?' dim':'');
     const cap=box.querySelector('.cap');
     if(G.winner&&G.winner!=='D'){const L=LINES.find(l=>l.every(k=>G.owner[k]===G.winner));box.classList.toggle('wl',!!L&&L.includes(b))}
     const o=G.owner[b],osig=o||'';
@@ -489,7 +494,7 @@ function render(){
       const sig=v||'';
       if(c.dataset.v!==sig){c.dataset.v=sig;c.innerHTML=svgOf(v)}
       c.classList.toggle('echo',!!(G.echo&&G.echo[b]&&G.echo[b][i]));
-      c.classList.toggle('can',!over&&ok.has(b+'-'+i));
+      c.classList.toggle('can',!over&&!cascading&&ok.has(b+'-'+i));
       c.classList.toggle('last',!!G.last&&G.last[0]===b&&G.last[1]===i);
       c.disabled=over||(!onl&&cfg.mode==='cpu'&&G.turn==='O');
     });
@@ -501,8 +506,8 @@ function render(){
     const rl=document.querySelector('.cell[data-b="'+G.last[0]+'"][data-i="'+G.last[1]+'"]');
     if(rl){rl.classList.add('rip');fxTimers.push(setTimeout(()=>rl.classList.remove('rip'),720))}
   }else if(!G.last)shownLast='';
-  // winning three boxes: one glowing line across the big board
-  if(G.winner&&G.winner!=='D'){
+  // winning three boxes: one glowing line across the big board (after the cascade settles)
+  if(!cascading&&G.winner&&G.winner!=='D'){
     const WL=LINES.find(l=>l.every(k=>G.owner[k]===G.winner));
     if(WL){
       const NS='http://www.w3.org/2000/svg';
@@ -531,7 +536,6 @@ function render(){
     G.lastEchoes=null;
   }
   if(G.lastChainCaps&&G.lastChainCaps.length){
-    cascadeUntil=Date.now()+Math.max.apply(null,G.lastChainCaps.map(m=>m[1]))+pace().popDur+150;
     G.lastChainCaps.forEach(m=>{
       const cap=document.querySelector('.box[data-b="'+m[0]+'"] .cap');
       if(cap)cap.style.animationDelay=m[1]+'ms';
@@ -563,9 +567,12 @@ function render(){
     });
     G.lastOpps=null;
   }
-  const chip=$('#chip');chip.innerHTML=over?(G.winner==='D'?(G.autoDraw?'Draw - no line left':'Draw'):mkIco(G.winner)+' wins'):(cfg.mode==='cpu'&&G.turn==='O'?'CPU thinking…':mkIco(G.turn)+' to move');chip.className='turn '+(G.winner?(G.winner==='D'?'D':G.winner):G.turn);
+  const chip=$('#chip');
+  const mover=G.winner&&G.winner!=='D'?G.winner:other(G.turn);
+  if(cascading){chip.innerHTML=mkIco(mover)+' captures…';chip.className='turn '+mover}
+  else{chip.innerHTML=over?(G.winner==='D'?(G.autoDraw?'Draw - no line left':'Draw'):mkIco(G.winner)+' wins'):(cfg.mode==='cpu'&&G.turn==='O'?'CPU thinking…':mkIco(G.turn)+' to move');chip.className='turn '+(G.winner?(G.winner==='D'?'D':G.winner):G.turn)}
   const free=G.target<0||boxDone(G,G.target);
-  $('#hint').textContent=over?'':G.target<0?'Play anywhere':free?'Target box is closed. Play any open box.':'Play in the glowing box';
+  $('#hint').textContent=over||cascading?'':G.target<0?'Play anywhere':free?'Target box is closed. Play any open box.':'Play in the glowing box';
   $('#scX').textContent=score.X;$('#scO').textContent=score.O;
   $('#score').textContent=score.D?('draws '+score.D):'';
   let nm=cfg.mode==='cpu'?{X:'You',O:'CPU'}:{X:cfg.names.X||'Player X',O:cfg.names.O||'Player O'};
@@ -591,7 +598,7 @@ function render(){
 function snapshot(){return JSON.stringify({cells:G.cells,owner:G.owner,turn:G.turn,target:G.target,winner:G.winner,autoDraw:G.autoDraw||null,last:G.last,echo:G.echo})}
 function persist(){store.set({cfg,score,game:{...JSON.parse(snapshot()),hist:G.hist}})}
 function skipCascade(){
-  cascadeUntil=0;
+  cascadeUntil=0;clearTimeout(cascTimer);
   clearFx();
   document.querySelectorAll('.cell,.cell .mark,.cap').forEach(el=>el.style.animationDelay='');
   render();
@@ -678,7 +685,7 @@ function showOver(){
   $('#overSub').innerHTML='Boxes captured: '+mkIco('X')+' '+x+' · '+mkIco('O')+' '+o;
   if(!$('#over').open)$('#over').showModal();
 }
-function newGame(){clearTimeout(cpuTimer);G=fresh();persist();render();maybeCpu()}
+function newGame(){clearTimeout(cpuTimer);cascadeUntil=0;clearTimeout(cascTimer);G=fresh();persist();render();maybeCpu()}
 function syncSeg(){
   for(const[id,k]of[['segMode','mode'],['segRule','rule'],['segFirst','first'],['segSpeed','speed']])
     document.querySelectorAll('#'+id+' button').forEach(b=>b.classList.toggle('on',b.dataset.v===cfg[k]));
@@ -714,7 +721,7 @@ $('#new').onclick=()=>{if(window.Online&&Online.active()){Online.requestRematch(
 $('#again').onclick=()=>{$('#over').close();if(window.Online&&Online.active()){Online.requestRematch();return}newGame()};
 $('#view').onclick=()=>$('#over').close();
 $('#undo').onclick=()=>{
-  if(!G.hist.length)return;clearTimeout(cpuTimer);
+  if(!G.hist.length)return;clearTimeout(cpuTimer);cascadeUntil=0;clearTimeout(cascTimer);
   const wasOver=!!G.winner;
   let n=1;if(cfg.mode==='cpu'&&G.hist.length>=2&&G.turn==='X')n=2; // undo CPU reply and own move
   if(cfg.mode==='cpu'&&G.turn==='O'&&!wasOver)n=1;
@@ -724,7 +731,7 @@ $('#undo').onclick=()=>{
   const h=G.hist,r=G.redo;G=Object.assign(JSON.parse(s),{hist:h,redo:r});persist();render();maybeCpu();
 };
 $('#redo').onclick=()=>{
-  if(!G.redo||!G.redo.length)return;clearTimeout(cpuTimer);
+  if(!G.redo||!G.redo.length)return;clearTimeout(cpuTimer);cascadeUntil=0;clearTimeout(cascTimer);
   const e=G.redo.pop();
   const states=[];for(let i=e.popped.length-1;i>=0;i--)states.push(e.popped[i]);states.push(e.cur);
   let s;for(let i=0;i<states.length-1;i++){G.hist.push(states[i]);s=states[i+1]}
