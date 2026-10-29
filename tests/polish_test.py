@@ -256,9 +256,13 @@ def chain_tests():
         pg.wait_for_timeout(80)
         n = pg.evaluate("window.__tttx.G.owner.filter(o=>o==='X').length")
         check('chain: capture cascaded to second box', n==2, f'X owns {n}')
-        d0 = pg.evaluate("document.querySelector('.box[data-b=\"0\"] .cap').style.animationDelay")
-        d1 = pg.evaluate("document.querySelector('.box[data-b=\"1\"] .cap').style.animationDelay")
-        check('chain: captures scheduled step-by-step', d0 and d1 and float(d0[:-2]) < float(d1[:-2]), f'{d0} vs {d1}')
+        d0 = pg.evaluate("document.querySelector('.box[data-b=\"0\"] .cap').classList.contains('show')")
+        d1 = pg.evaluate("document.querySelector('.box[data-b=\"1\"] .cap').classList.contains('show')")
+        check('chain: captures hidden until their flip', not d0 and not d1, f'{d0} {d1}')
+        pg.wait_for_timeout(700)  # ~780ms: past first flip (590ms), before chain flip (1990ms)
+        c0 = pg.evaluate("document.querySelector('.box[data-b=\"0\"] .cap').classList.contains('show')")
+        c1 = pg.evaluate("document.querySelector('.box[data-b=\"1\"] .cap').classList.contains('show')")
+        check('chain: captures land step-by-step', c0 and not c1, f'{c0} {c1}')
         ed = pg.evaluate("[...document.querySelectorAll('.cell.echo')].map(c=>c.style.animationDelay).filter(Boolean).length")
         check('chain: echo landings individually timed', ed>=6, f'{ed} echoes timed')
         src = pg.evaluate("[...document.querySelectorAll('.box')].filter(b=>b.className.includes('srcp')).length")
@@ -276,12 +280,74 @@ def chain_tests():
         pg.evaluate("""(()=>{const T=window.__tttx;T.cfg.speed='slow';T.localNew();const g=T.G;
           g.cells[0]=['X','X','','','','','','',''];g.turn='X';g.target=0;T.render()})()""")
         pg.evaluate("window.__tttx.move(0,2)")
-        slowCap = pg.evaluate("parseFloat(document.querySelector('.box[data-b=\"0\"] .cap').style.animationDelay)")
-        check('chain: slow setting stretches the beat', slowCap>800, f'{slowCap}ms')
+        pg.wait_for_timeout(800)
+        check('chain: slow setting stretches the beat', not pg.evaluate("document.querySelector('.box[data-b=\"0\"] .cap').classList.contains('show')"))
+        pg.wait_for_timeout(1400)  # slow first flip lands at ~1700ms
+        check('chain: slow flip lands on its own clock', pg.evaluate("document.querySelector('.box[data-b=\"0\"] .cap').classList.contains('show')"))
         b.close()
 
 chain_tests()
+
+def reveal_tests():
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        pg = b.new_context(viewport={'width':390,'height':844}).new_page()
+        pg.goto(BASE); pg.wait_for_selector('#big .cell'); pg.wait_for_timeout(200)
+        craft = """(()=>{const T=window.__tttx;T.cfg.mode='2p';T.cfg.speed='normal';T.localNew();const g=T.G;
+          g.cells[0]=['X','X','','','','','','',''];
+          g.cells[1]=['','X','X','','','','','',''];
+          g.turn='X';g.target=0;T.render()})()"""
+        # before anything plays: no spoilers (glow at 340ms, flip at 590ms, echoes from 890ms)
+        pg.evaluate(craft)
+        pg.evaluate("window.__tttx.move(0,2)")
+        pg.wait_for_timeout(80)
+        st = json.loads(pg.evaluate("""JSON.stringify({
+          cap0: document.querySelector('.box[data-b="0"] .cap').classList.contains('show'),
+          cap1: document.querySelector('.box[data-b="1"] .cap').classList.contains('show'),
+          cellVis: getComputedStyle(document.querySelector('.cell[data-b="0"][data-i="0"]')).visibility,
+          pre: document.querySelectorAll('.cell.echo.pre').length,
+          echoBg: getComputedStyle(document.querySelector('.cell.echo.pre')).backgroundColor,
+          plainBg: getComputedStyle(document.querySelector('.cell[data-b="5"][data-i="1"]')).backgroundColor,
+          border0: getComputedStyle(document.querySelector('.box[data-b="0"]')).borderColor,
+          capline: document.getElementById('capline').classList.contains('on')})"""))
+        check('reveal: no box looks captured before its flip', not st['cap0'] and not st['cap1'] and st['cellVis']=='visible', st)
+        check('reveal: echo cells carry no early tint', st['pre']==15 and st['echoBg']==st['plainBg'], st)
+        check('reveal: captured box keeps plain border before flip', st['border0']!='rgb(139, 156, 255)', st['border0'])
+        check('reveal: no caption before the flip', not st['capline'], st)
+        # mid-cascade (~960ms): first box flipped, echoes landing one at a time, chain box still hidden
+        pg.wait_for_timeout(880)
+        st = json.loads(pg.evaluate("""JSON.stringify({
+          cap0: document.querySelector('.box[data-b="0"] .cap').classList.contains('show'),
+          cap1: document.querySelector('.box[data-b="1"] .cap').classList.contains('show'),
+          revealed: document.querySelectorAll('.cell.echo:not(.pre)').length,
+          total: document.querySelectorAll('.cell.echo').length,
+          capline: document.getElementById('capline').classList.contains('on')})"""))
+        check('reveal: first box flips at its moment, chain box still hidden', st['cap0'] and not st['cap1'], st)
+        check('reveal: echoes land one at a time', 0 < st['revealed'] < st['total'], st)
+        check('reveal: caption speaks as it happens', st['capline'], st)
+        # settled (~2700ms): full final state visible, no pending pre-hides
+        pg.wait_for_timeout(1750)
+        st = json.loads(pg.evaluate("""JSON.stringify({
+          cap0: document.querySelector('.box[data-b="0"] .cap').classList.contains('show'),
+          cap1: document.querySelector('.box[data-b="1"] .cap').classList.contains('show'),
+          preLeft: document.querySelectorAll('.cell.echo.pre').length,
+          chip: document.getElementById('chip').textContent})"""))
+        check('reveal: full final state after settle', st['cap0'] and st['cap1'] and st['preLeft']==0 and 'to move' in st['chip'], st)
+        # skip-by-tap: final state instantly, no pre leftovers
+        pg.evaluate(craft)
+        pg.evaluate("window.__tttx.move(0,2)")
+        pg.wait_for_timeout(100)
+        pg.evaluate("window.__tttx.play(4,4)")
+        pg.wait_for_timeout(60)
+        st = json.loads(pg.evaluate("""JSON.stringify({
+          caps: document.querySelectorAll('.cap.show').length,
+          preLeft: document.querySelectorAll('.cell.echo.pre').length})"""))
+        check('reveal: skip shows everything instantly', st['caps']==2 and st['preLeft']==0, st)
+        b.close()
+
+reveal_tests()
 fails=[n for n,ok in results if not ok]
 print(f"\nTOTAL {len(results)-len(fails)}/{len(results)} PASS")
 
 import sys as _s;_s.exit(1 if [n for n,ok in results if not ok] else 0)
+
