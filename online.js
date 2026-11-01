@@ -8,6 +8,19 @@ const T=()=>window.__tttx;
 const ADJ=['Swift','Calm','Bright','Lucky','Quiet','Merry','Bold','Clever','Gentle','Jolly','Keen','Mighty','Nimble','Proud','Rapid','Sunny','Witty','Zesty','Cosy','Eager'];
 const ANI=['Fox','Owl','Bear','Wolf','Lynx','Hawk','Deer','Frog','Crow','Seal','Wren','Elk','Jay','Mole','Hare','Newt','Ibex','Toad','Vole','Puma'];
 const nick=()=>ADJ[Math.random()*ADJ.length|0]+ANI[Math.random()*ANI.length|0]+(10+Math.random()*90|0);
+const pn=n=>{const m=/^([A-Z][a-z]+)([A-Z][a-z]+)\d{2}$/.exec(n||'');return m?m[1]+' '+m[2]:(n||'')};
+function devId(){var k='tttx-did',id=null;try{id=localStorage.getItem(k)}catch(e){}
+  var m=/(?:^|; )tttx_did=([^;]+)/.exec(document.cookie);if(m)id=m[1];
+  if(!id)id=Math.random().toString(36).slice(2,8)+Math.random().toString(36).slice(2,8);
+  try{localStorage.setItem(k,id)}catch(e){}
+  if(/(^|\.)miraliyev\.tech$/.test(location.hostname))document.cookie='tttx_did='+id+';domain=.miraliyev.tech;path=/;max-age=63072000;SameSite=Lax;Secure';
+  return id}
+function devFp(){var n=navigator,s=screen,g='';try{var c=document.createElement('canvas').getContext('webgl');var e=c&&c.getExtension('WEBGL_debug_renderer_info');g=e?c.getParameter(e.UNMASKED_RENDERER_WEBGL):''}catch(e){}
+  var str=[n.userAgent,n.platform,n.language,(n.languages||[]).join(),s.width,s.height,s.colorDepth,devicePixelRatio,n.hardwareConcurrency,n.deviceMemory,n.maxTouchPoints,Intl.DateTimeFormat().resolvedOptions().timeZone,g].join('|');
+  var h=5381;for(var i=0;i<str.length;i++)h=((h<<5)+h+str.charCodeAt(i))|0;return (h>>>0).toString(36)}
+var MY_DK=devId(),MY_FP=devFp();
+function sameDev(p){return p&&((p.dk&&p.dk===MY_DK)||(p.fp&&p.fp===MY_FP))}
+
 const rid=()=>{const a='abcdefghjkmnpqrstuvwxyz23456789';let s='';for(let i=0;i<6;i++)s+=a[Math.random()*a.length|0];return s};
 
 let tOff=0;
@@ -36,14 +49,14 @@ function shareLink(){if(roomLink&&navigator.share)navigator.share({title:'TicTac
 const popOpen=e=>!!(e&&e.matches&&e.matches(':popover-open'));
 function toast(msg,ms=2600){const t=$('#toast');t.textContent=msg;if(!popOpen(t))t.showPopover();t.className='show';clearTimeout(t._h);t._h=setTimeout(()=>{t.className='';if(popOpen(t))t.hidePopover()},ms)}
 const wbShow=e=>{if(e)e.classList.add('on')};const wbHide=e=>{if(e)e.classList.remove('on')};
-function toastAsk(fromNick,accept,decline){
+function toastAsk(fromNick,accept,decline,life){
   const t=$('#toast');t.innerHTML='';
-  const s=document.createElement('span');s.textContent=fromNick+' invites you to play';
+  const s=document.createElement('span');s.textContent=pn(fromNick)+' invites you to play';
   const a=document.createElement('button');a.textContent='Accept';a.className='ok';
   const d=document.createElement('button');d.textContent='Decline';
-  a.onclick=()=>{t.className='';if(popOpen(t))t.hidePopover();accept()};d.onclick=()=>{t.className='';if(popOpen(t))t.hidePopover();decline()};
-  t.append(s,a,d);if(!popOpen(t))t.showPopover();t.className='show ask';
-  clearTimeout(t._h);t._h=setTimeout(()=>{if(t.className){t.className='';if(popOpen(t))t.hidePopover();decline(true)}},60000);
+  a.onclick=()=>{t._ans=1;t.className='';if(popOpen(t))t.hidePopover();accept()};d.onclick=()=>{t._ans=1;t.className='';if(popOpen(t))t.hidePopover();decline()};
+  t.append(s,a,d);if(!popOpen(t))t.showPopover();t.className='show ask';t._ans=0;
+  clearTimeout(t._h);t._h=setTimeout(()=>{if(t.className){t._ans=1;t.className='';if(popOpen(t))t.hidePopover();decline(true)}},life||60000);
 }
 
 // ---------- presence ----------
@@ -53,14 +66,14 @@ async function presenceOn(){
   onValue(ref(db,'.info/serverTimeOffset'),s=>{tOff=s.val()||0});
   const p=ref(db,'presence/'+me.uid);
   const hide=localStorage.getItem('tttx-hide')==='1';
-  const beat=()=>set(p,{nick:myNick,ts:serverTimestamp(),hide,room:roomId||null});
+  const beat=()=>set(p,{nick:myNick,ts:serverTimestamp(),hide,room:roomId||null,dk:MY_DK,fp:MY_FP});
   beat();onDisconnect(p).remove();
   clearInterval(hb);hb=setInterval(beat,25000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)beat()});
   if(plistOn)return;plistOn=true;
   onValue(ref(db,'presence'),snap=>{
     const v=snap.val()||{},now=nowSrv();
-    const list=Object.entries(v).filter(([u,p])=>u!==me.uid&&p&&!p.hide&&p.ts&&now-p.ts<90000);
+    const list=Object.entries(v).filter(([u,p])=>u!==me.uid&&p&&!sameDev(p)&&!p.hide&&p.ts&&now-p.ts<90000);
     $('#pcount').textContent=list.length;
     const ob=$('#online');if(ob)ob.innerHTML=fmtOnlinePill(list.length);
     const el=$('#plist');el.innerHTML='';
@@ -68,7 +81,7 @@ async function presenceOn(){
     for(const[u,p]of list){
       const row=document.createElement('div');row.className='pitem';
       const dot=document.createElement('span');dot.className='dot'+(p.room?' busy':'');
-      const n=document.createElement('span');n.className='nick';n.textContent=p.nick;
+      const n=document.createElement('span');n.className='nick';n.textContent=pn(p.nick)+((list.filter(([,q])=>pn(q.nick)===pn(p.nick)).length>1&&pn(p.nick)!==p.nick)?' #'+p.nick.slice(-2):'');
       const st=document.createElement('span');st.className='st';st.textContent=(p.room?'· in a game':'· free')+(p.site?' · on '+p.site:'');
       const b=document.createElement('button');
       if(p.room){b.textContent='In a game';b.disabled=true}
@@ -168,7 +181,7 @@ function handleOppGone(v,id){
 }
 function onOppGoneState(gone,id,opp){
   if(roomId!==id)return;
-  const name=(opp&&opp.nick)||'Opponent';
+  const name=pn((opp&&opp.nick)||'Opponent');
   if(gone&&!oppGone){
     oppGone=true;
     $('#onick').textContent='vs '+name+' - reconnecting…';
@@ -201,7 +214,7 @@ function enterRoom(id,asSeat,spec,keepLobby){
     if(!v){
       if(room){
         const hadOpp=room.players&&room.players.X&&room.players.O;
-        const oppNick=hadOpp?((room.players[seat==='X'?'O':'X']||{}).nick||'Opponent'):'Opponent';
+        const oppNick=hadOpp?(pn((room.players[seat==='X'?'O':'X']||{}).nick||'Opponent')):'Opponent';
         cleanupRoom();
         toast(hadOpp?oppNick+' left - back to local play':'Room closed');
       }
@@ -215,7 +228,7 @@ function enterRoom(id,asSeat,spec,keepLobby){
     if(!spec&&v.status==='waiting'){wb.querySelector('span').textContent='Room ready - send this link, then stay on this page';const wcx=$('#waitcancel');if(wcx)wcx.style.display='none'}
     if(!spec&&v.status==='playing'){const lb=$('#lobby');if(lb.open)lb.close()}
     $('#leave').textContent=spec?'Leave':(v.host===me.uid?'Close room':'Leave game');
-    if(!oppGone)$('#onick').textContent=spectate?'Spectating':(opp&&opp.nick?('vs '+opp.nick):'Waiting for opponent…');
+    if(!oppGone)$('#onick').textContent=spectate?'Spectating':(opp&&opp.nick?('vs '+pn(opp.nick)):'Waiting for opponent…');
     T().setOnlineRule(v.cfg&&v.cfg.rule||null);
     if(v.score){const s=T().score;s.X=v.score.X||0;s.O=v.score.O||0;s.D=v.score.D||0}
     handleOppGone(v,id);
@@ -257,7 +270,7 @@ function leaveRoom(){
   if(iPlay)remove(ref(db,'rooms/'+id)).catch(()=>{});
 }
 Online.leave=leaveRoom;
-Online.names=function(){if(!room)return null;const px=room.players&&room.players.X,po=room.players&&room.players.O;return{X:px&&px.nick||'\u2026',O:po&&po.nick||'\u2026'}};
+Online.names=function(){if(!room)return null;const px=room.players&&room.players.X,po=room.players&&room.players.O;return{X:px&&pn(px.nick)||'\u2026',O:po&&pn(po.nick)||'\u2026'}};
 Online.waiting=function(){if(!roomId)return false;return!room||room.status==='waiting'};
 
 // move hook: called inside move() after play(), before persist/render
@@ -300,7 +313,7 @@ Online.statusText=function(){
   if(room.status==='waiting')return{chip:'Waiting…',hint:'Share the invite link'};
   if(oppGone)return{chip:'Reconnecting…',hint:'Opponent lost connection'};
   if(g.winner)return null; // default over text
-  return{chip:g.turn===seat?'Your move':(room.players[otherSeat()]||{}).nick+' to move',hint:g.turn===seat?'':'Wait for your turn'};
+  return{chip:g.turn===seat?'Your move':pn((room.players[otherSeat()]||{}).nick)+' to move',hint:g.turn===seat?'':'Wait for your turn'};
 };
 function otherSeat(){return seat==='X'?'O':'X'}
 Online.requestRematch=function(){
@@ -327,6 +340,7 @@ function wireReconnect(){
 
 // ---------- invites ----------
 async function sendInvite(toUid,toNick,btn){
+  toNick=pn(toNick);
   const rate=(await get(ref(db,'rate/'+me.uid))).val()||{};
   if(rate.lastInvite&&Date.now()-rate.lastInvite<10000){toast('One invite at a time - wait a few seconds');return}
   const id=await createRoom();if(!id)return;
@@ -375,6 +389,9 @@ function invitesOn(){
       const ir=ref(db,'invites/'+me.uid+'/'+k);
       if(roomId){update(ir,{status:'busy'}).catch(()=>{});continue}
       if(iv._shown)continue;iv._shown=true;
+      const lim=iv.fromSite?28000:60000;if(now-iv.ts>lim)continue;
+      const tt=$('#toast');
+      const offW=onValue(ir,sn=>{const x=sn.val();if(x&&x.status==='pending')return;offW();if(tt.className&&tt.classList.contains('ask')&&!tt._ans){tt._ans=1;clearTimeout(tt._h);tt.className='';if(popOpen(tt))tt.hidePopover();toast(pn(iv.fromNick||'Someone')+' cancelled the invite')}});
       toastAsk(iv.fromNick||'Someone',async()=>{
         const ok=await claimSeatO(iv.roomId);
         if(!ok){
@@ -393,7 +410,7 @@ function invitesOn(){
             if(rv&&rv.status==='waiting'&&!(rv.players&&rv.players.O))update(ref(db,'rooms/'+iv.roomId),{'players/O':{uid:me.uid,nick:myNick,declined:true}}).catch(()=>{});
           }).catch(()=>{});
         }
-      });
+      },lim-(now-iv.ts));
       break; // one toast at a time
     }
   });
@@ -467,7 +484,8 @@ async function boot(){
     const rv=(await get(rr)).val();
     if(!rv){toast('That room is closed');return}
     if(q.get('as')==='host'&&rv.players&&rv.players.X&&rv.players.X.pending&&rv.players.X.uid!==me.uid){
-            await update(rr,{'players/X':{uid:me.uid,nick:myNick},host:me.uid}).catch(()=>{});
+      // inviter from a site widget: the widget reserved seat X (its login differs from this page's), claim it now
+      await update(rr,{'players/X':{uid:me.uid,nick:myNick},host:me.uid}).catch(()=>{});
       enterRoom(join,'X',false);
     }
     else if(rv.players&&rv.players.X&&rv.players.X.uid===me.uid)enterRoom(join,'X',false);

@@ -10,13 +10,13 @@
 <meta property="og:description" content="Every move sends your opponent to a new box. Captures echo across the board.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://tttx.miraliyev.tech/">
-<meta property="og:image" content="https://tttx.miraliyev.tech/og-cover.png">
+<meta property="og:image" content="https://tttx.miraliyev.tech/og-cover.png?v=2">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="TicTacToe Extended">
 <meta name="twitter:description" content="Every move sends your opponent to a new box. Captures echo across the board.">
-<meta name="twitter:image" content="https://tttx.miraliyev.tech/og-cover.png">
+<meta name="twitter:image" content="https://tttx.miraliyev.tech/og-cover.png?v=2">
 <meta property="og:site_name" content="miraliyev.tech">
 <meta property="og:image:type" content="image/png">
 <meta name="twitter:image:alt" content="TicTacToe Extended - glowing X and O marks on a dark starry board">
@@ -988,6 +988,14 @@ async function makeCardBlob(){
       if(ow==='D'){c.font='800 84px '+SAN;c.fillStyle=DC;c.textAlign='center';c.textBaseline='middle';c.fillText('\u2013',bx+S/2,by+S/2);c.textAlign='left';c.textBaseline='alphabetic'}
       else dMark(ow,bx+S/2,by+S/2,S*0.34,S*0.062);
     }
+  }
+  /* winning line across the three winning boxes, same look as the live board (round cap, pale colour, glow) */
+  if(winLine.length===3){
+    const ctr=b=>[x0+(b%3)*(S+GAP)+S/2,y0+Math.floor(b/3)*(S+GAP)+S/2];
+    const a0=ctr(winLine[0]),z0=ctr(winLine[2]),ddx=z0[0]-a0[0],ddy=z0[1]-a0[1],ln=Math.hypot(ddx,ddy)||1,ex=(ddx&&ddy)?S*0.6:S*0.43;
+    const wc=d.w==='X'?'#c9d3ff':'#ffc7d8',gc=d.w==='X'?'rgba(139,156,255,.9)':'rgba(255,93,143,.9)';
+    c.save();c.lineCap='round';c.lineWidth=17;c.strokeStyle=wc;c.shadowColor=gc;c.shadowBlur=26;
+    c.beginPath();c.moveTo(a0[0]-ddx/ln*ex,a0[1]-ddy/ln*ex);c.lineTo(z0[0]+ddx/ln*ex,z0[1]+ddy/ln*ex);c.stroke();c.restore();
   }
   const yb=y0+3*S+2*GAP;
   row(yb+68,[{t:'Boxes captured   ',f:'400 34px '+SAN,c:DIM},{m:'X',span:26},{t:'\u2002'+d.bx,f:'700 38px '+SAN,c:XC},{t:'   \u00b7   ',f:'400 34px '+SAN,c:DIM},{m:'O',span:26},{t:'\u2002'+d.bo,f:'700 38px '+SAN,c:OC}]);
