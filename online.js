@@ -466,7 +466,11 @@ async function boot(){
     const rr=ref(db,'rooms/'+join);
     const rv=(await get(rr)).val();
     if(!rv){toast('That room is closed');return}
-    if(rv.players&&rv.players.X&&rv.players.X.uid===me.uid)enterRoom(join,'X',false);
+    if(q.get('as')==='host'&&rv.players&&rv.players.X&&rv.players.X.pending&&rv.players.X.uid!==me.uid){
+            await update(rr,{'players/X':{uid:me.uid,nick:myNick},host:me.uid}).catch(()=>{});
+      enterRoom(join,'X',false);
+    }
+    else if(rv.players&&rv.players.X&&rv.players.X.uid===me.uid)enterRoom(join,'X',false);
     else if(rv.players&&rv.players.O&&rv.players.O.uid===me.uid)enterRoom(join,'O',false);
     else if(rv.players&&!rv.players.O&&rv.status==='waiting'){
       const ok=await claimSeatO(join);
