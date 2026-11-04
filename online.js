@@ -47,6 +47,9 @@ function copyText(txt,btn){
 function legacyCopy(txt){const i=$('#rlink');if(i&&i.value===txt){i.select();try{document.execCommand('copy')}catch(e){}}else{const t=document.createElement('textarea');t.value=txt;document.body.appendChild(t);t.select();try{document.execCommand('copy')}catch(e){}t.remove()}}
 function shareLink(){if(roomLink&&navigator.share)navigator.share({title:'TicTacToe Extended',text:'Play TicTacToe Extended with me',url:roomLink}).catch(()=>{})}
 const popOpen=e=>!!(e&&e.matches&&e.matches(':popover-open'));
+const drawStarter=()=>crypto.getRandomValues(new Uint32Array(1))[0]<0x80000000;
+// Draw once per operation, outside RTDB's retryable transaction callback.
+function swapPlayers(cur){const p=cur.players;cur.players={X:p.O,O:p.X};const sc=cur.score||{};cur.score={X:sc.O||0,O:sc.X||0,D:sc.D||0}}
 const INVITE_TTL=30000; // one invite lifetime everywhere: game lobby and site widget
 function toast(msg,ms=2600){const t=$('#toast');t.textContent=msg;if(!popOpen(t))t.showPopover();t.className='show';clearTimeout(t._h);t._h=setTimeout(()=>{t.className='';if(popOpen(t))t.hidePopover()},ms)}
 const wbShow=e=>{if(e)e.classList.add('on')};const wbHide=e=>{if(e)e.classList.remove('on')};
@@ -111,23 +114,27 @@ async function createRoom(){
   }
   toast('Could not create a room, try again');return null;
 }
-// Atomically claim the O seat. Returns true only if THIS client seated itself.
+// Atomically join and randomly assign X to one of the two players. Returns true only if THIS client seated itself.
 async function claimSeatO(id){
   const r=ref(db,'rooms/'+id);
   // RTDB transactions need a locally cached value, and the cache is dropped when the last
   // listener detaches - so hold a one-shot listener attached across the transaction.
   let off=null;
   await new Promise(res=>{off=onValue(r,()=>res());setTimeout(res,4000)});
+  const joinerStarts=drawStarter();
   try{
     const res=await runTransaction(r,cur=>{
       if(!cur)return;                       // room gone
       if(cur.status!=='waiting')return;      // already started
       if(cur.players&&cur.players.O)return;  // seat taken
       cur.players=cur.players||{};
+      if(!cur.players.X||cur.players.X.uid===me.uid)return;
       cur.players.O={uid:me.uid,nick:myNick};
+      if(joinerStarts)swapPlayers(cur);
+      cur.starterDraw=true;cur.seatReason='random';
       cur.status='playing';
       return cur;
-    });
+    },{applyLocally:false});
     return !!(res&&res.committed);
   }catch(e){return false}
   finally{if(off)off()}
@@ -169,7 +176,7 @@ function handleOppGone(v,id){
   if(spectate||!v.players||!seat)return;
   const oppSeat=seat==='X'?'O':'X';
   const opp=v.players[oppSeat];
-  if(!opp||!opp.uid||opp.declined||v.status!=='playing'){ // nobody to watch (yet)
+  if(!opp||!opp.uid||opp.pending||opp.declined||v.status!=='playing'){ // nobody to watch (yet)
     stopOppWatch();return;
   }
   const goneMarker=!!opp.gone;
@@ -207,14 +214,17 @@ function enterRoom(id,asSeat,spec,keepLobby){
   }).catch(()=>{});
   set(ref(db,'presence/'+me.uid+'/room'),id).catch(()=>{});
   if(!keepLobby)$('#lobby').close();
-  if(!spec&&seat){
-    goneRef=ref(db,'rooms/'+id+'/players/'+seat+'/gone');
+  let boundSeat=null;
+  function bindSeat(){
+    if(spec||!seat||boundSeat===seat)return;
+    if(goneRef)onDisconnect(goneRef).cancel().catch(()=>{});
+    boundSeat=seat;goneRef=ref(db,'rooms/'+id+'/players/'+seat+'/gone');
     set(goneRef,null).catch(()=>{});
     onDisconnect(goneRef).set(serverTimestamp());
   }
   const r=ref(db,'rooms/'+id);
   if(roomOff)roomOff();
-  let prevOffer=null, promptForTs=0;
+  let prevOffer=null, promptForTs=0,announcedGame=null;
   roomOff=onValue(r,snap=>{
     const v=snap.val();
     if(!v){
@@ -228,7 +238,19 @@ function enterRoom(id,asSeat,spec,keepLobby){
     }
     room=v;
     if(v.players){if(v.players.X&&v.players.X.uid===me.uid)seat='X';else if(v.players.O&&v.players.O.uid===me.uid)seat='O'}
+    bindSeat();
     const opp=seat==='X'?v.players&&v.players.O:v.players&&v.players.X;
+    const pending=v.players&&Object.values(v.players).some(p=>p&&p.pending);
+    const start=$('#startnotice');
+    if(start){
+      if(spec||v.status!=='playing'||(v.moveCount||0)>0){if(start.open)start.close()}
+      else{
+        const x=pn(v.players.X.nick),o=pn(v.players.O.nick),steps=$('#startsteps');
+        steps.replaceChildren();
+        for(const line of ['1. '+(v.seatReason==='handoff'?'Seats after handoff':v.starterDraw?'Random draw':'Seats')+': '+x+' is X; '+o+' is O.','2. You are '+seat+'.','3. '+(pending?'Waiting for both players to join.':x+' moves first (X).')]){const p=document.createElement('p');p.textContent=line;steps.append(p)}
+        if(announcedGame!==(v.gameId||1)){announcedGame=v.gameId||1;if(!start.open)start.showModal()}
+      }
+    }
     $('#obar').style.display='flex';
     const wb=$('#waitbar');(!spec&&v.status==='waiting')?wbShow(wb):wbHide(wb);
     if(!spec&&v.status==='waiting'){wb.querySelector('span').textContent='Room ready - send this link, then stay on this page';const wcx=$('#waitcancel');if(wcx)wcx.style.display='none'}
@@ -241,7 +263,7 @@ function enterRoom(id,asSeat,spec,keepLobby){
     // seat swap: X may hand the X seat (first move) to O once per room
     const sw=$('#swapseat');
     if(sw){
-      const canOffer=!spec&&v.status==='playing'&&seat==='X'&&(v.moveCount||0)===0&&!(v.state&&v.state.winner)&&!v.swapUsed&&!v.swapOffer;
+      const canOffer=!spec&&v.status==='playing'&&seat==='X'&&(v.moveCount||0)===0&&!(v.state&&v.state.winner)&&!v.swapUsed&&!v.swapOffer&&!pending;
       const offered=seat==='X'&&v.swapOffer==='X'&&!v.swapUsed;
       sw.style.display=(canOffer||offered)?'':'none';
       if(canOffer){sw.disabled=false;sw.textContent='Give X seat';clearInterval(sw._cd);sw._cd=0}
@@ -251,7 +273,7 @@ function enterRoom(id,asSeat,spec,keepLobby){
       }else if(sw._cd){clearInterval(sw._cd);sw._cd=0}
       // resolution feedback for the player who offered
       if(prevOffer==='X'&&v.swapOffer!=='X'){
-        if(v.swapUsed)toast(pn(opp&&opp.nick||'Opponent')+' took the X seat - you are O now');
+        if(v.swapUsed)toast('X seat handed over - you are O now');
         else if(v.swapDeclinedBy)toast(pn(opp&&opp.nick||'Opponent')+' declined the swap');
         else if(!sw._cd)toast('No answer - swap offer cancelled');
       }
@@ -264,17 +286,15 @@ function enterRoom(id,asSeat,spec,keepLobby){
           const res=await runTransaction(r,cur=>{
             if(!cur||cur.swapOffer!=='X'||cur.swapUsed||(cur.moveCount||0)>0||cur.status!=='playing')return;
             const px=cur.players&&cur.players.X,po=cur.players&&cur.players.O;
-            if(!px||!po)return;
-            cur.players={X:po,O:px};
-            const sc=cur.score||{X:0,O:0,D:0};
-            cur.score={X:sc.O||0,O:sc.X||0,D:sc.D||0};
-            cur.swapOffer=null;cur.swapUsed=true;
+            if(!px||!po||po.uid!==me.uid||nowSrv()-(cur.swapOfferTs||0)>30000)return;
+            swapPlayers(cur);
+            cur.swapOffer=null;cur.swapUsed=true;cur.seatReason='handoff';
             return cur;
-          }).catch(()=>null);
+          },{applyLocally:false}).catch(()=>null);
           if(res&&res.committed)toast('You are X now - your move');
           else toast('That swap offer expired');
         },(silent)=>{
-          update(r,{swapOffer:null,...(silent?{}:{swapDeclinedBy:true})}).catch(()=>{});
+          runTransaction(r,cur=>{if(!cur||cur.swapOffer!=='X'||cur.swapOfferTs!==promptForTs)return;cur.swapOffer=null;if(!silent)cur.swapDeclinedBy=true;return cur},{applyLocally:false}).catch(()=>{});
           if(!silent)toast('You kept the O seat');
         },Math.max(3000,30000-(nowSrv()-(v.swapOfferTs||nowSrv()))));
       }
@@ -284,18 +304,18 @@ function enterRoom(id,asSeat,spec,keepLobby){
     if(gid!==seenGameId){seenGameId=gid;seenMC=-1;if(v.state)applyServerState(v,true)}
     else if(v.state&&typeof v.moveCount==='number'&&v.moveCount>seenMC){applyServerState(v,false)}
     else T().render(); // refresh names/seat/chip/lock even when no move landed
-    // rematch handshake: both flagged -> host resets atomically with swapped seats
+    // Both agree to a new round: one committed random draw; scores stay with people.
     if(v.rematch&&v.rematch.X&&v.rematch.O&&v.host===me.uid&&!spec){
+      const nextGameId=v.gameId||1,flip=drawStarter();
       runTransaction(r,cur=>{
-        if(!cur||!cur.rematch||!cur.rematch.X||!cur.rematch.O)return; // abort: flags changed
+        if(!cur||(cur.gameId||1)!==nextGameId||!cur.rematch||!cur.rematch.X||!cur.rematch.O)return; // abort: flags changed
         const px=cur.players.X,po=cur.players.O;
         if(!px||!po)return;
-        cur.players={X:po,O:px};
-        const sc=cur.score||{X:0,O:0,D:0};
-        cur.score={X:sc.O||0,O:sc.X||0,D:sc.D||0}; // scores stay with the players across the seat swap
+        if(flip)swapPlayers(cur); // scores follow people, not symbols
+        cur.starterDraw=true;cur.seatReason='random';cur.swapOffer=null;cur.swapOfferTs=null;cur.swapDeclinedBy=null;
         cur.state=freshState();cur.anim=null;cur.moveCount=0;cur.gameId=(cur.gameId||1)+1;cur.rematch=null;cur.status='playing';
         return cur;
-      }).catch(()=>{});
+      },{applyLocally:false}).catch(()=>{});
     }
   });
 }
@@ -306,6 +326,7 @@ function cleanupRoom(){
   room=null;roomId=null;seat=null;spectate=false;seenMC=-1;seenGameId=null;roomLink='';
   T().setOnlineRule(null);
   $('#obar').style.display='none';
+  if($('#startnotice')?.open)$('#startnotice').close();
   wbHide($('#waitbar'));
   if(me)set(ref(db,'presence/'+me.uid+'/room'),null).catch(()=>{});
   T().localNew();
@@ -326,11 +347,13 @@ Online.onLocalMove=function(){
   const g=T().G;
   const anim={echoes:g.lastEchoes||null,caps:g.lastChainCaps||null,glow:g.lastChainGlow||null,opps:g.lastOpps||null};
   const st=JSON.parse(JSON.stringify({cells:g.cells,owner:g.owner,turn:g.turn,target:g.target,winner:g.winner,last:g.last,echo:g.echo}));
+  const expectedGameId=room.gameId||1;
   const expected=room.moveCount||0, mySeat=seat, uid=me.uid, id=roomId, won=g.winner;
   seenMC=expected+1; // optimistic: stale snapshots (moveCount <= this) are ignored until our write echoes
   runTransaction(ref(db,'rooms/'+id),cur=>{
     if(!cur)return;                             // abort: room gone
     if((cur.moveCount||0)!==expected)return;    // abort: state moved on without us
+    if((cur.gameId||1)!==expectedGameId||!cur.players||!cur.players[mySeat]||cur.players[mySeat].uid!==uid||cur.swapOffer||Object.values(cur.players).some(p=>p&&p.pending))return;
     if(!cur.state||cur.state.turn!==mySeat)return; // abort: not our turn on the server
     cur.state=st;cur.anim=anim;cur.moveCount=expected+1;cur.lastMoveBy=uid;cur.status='playing';
     if(won){cur.score=cur.score||{X:0,O:0,D:0};cur.score[won]=(cur.score[won]||0)+1}
@@ -345,7 +368,10 @@ Online.tap=function(b,i){
   if(!roomId)return false;
   if(!room){T().warn('Connecting…');return true}
   if(spectate){T().warn('You are spectating');return true}
+  if($('#startnotice')?.open)return true;
   if(room.status==='waiting'){T().warn('Waiting for opponent to join');return true}
+  if(Object.values(room.players||{}).some(p=>p&&p.pending)){T().warn('Waiting for both players to join');return true}
+  if(room.swapOffer){T().warn('Finish the X seat offer first');return true}
   const g=T().G;
   if(g.winner)return true;
   if(g.turn!==seat){T().warn("Opponent's turn");return true}
@@ -358,6 +384,8 @@ Online.statusText=function(){
   const g=T().G;
   if(spectate)return{chip:g.winner?(g.winner==='D'?'Draw':(T().mkIco?T().mkIco(g.winner):g.winner)+' wins'):(T().mkIco?T().mkIco(g.turn):g.turn)+' to move',hint:'Spectating'};
   if(room.status==='waiting')return{chip:'Waiting…',hint:'Share the invite link'};
+  if(Object.values(room.players||{}).some(p=>p&&p.pending))return{chip:'Waiting…',hint:'Both players must join before the first move'};
+  if(room.swapOffer)return{chip:'Seat offer pending',hint:'Accept or decline before playing'};
   if(oppGone)return{chip:'Reconnecting…',hint:'Opponent lost connection'};
   if(g.winner)return null; // default over text
   return{chip:g.turn===seat?'Your move':pn((room.players[otherSeat()]||{}).nick)+' to move',hint:g.turn===seat?'':'Wait for your turn'};
@@ -366,7 +394,7 @@ function otherSeat(){return seat==='X'?'O':'X'}
 Online.requestRematch=function(){
   if(!room||spectate)return;
   set(ref(db,'rooms/'+roomId+'/rematch/'+seat),true).catch(()=>{});
-  toast('Rematch offered');
+  toast('New round offered - both players agree, then X is drawn at random');
 };
 
 // ---------- reconnect resync ----------
@@ -447,7 +475,7 @@ function invitesOn(){
           if(!mine){update(ir,{status:'expired'}).catch(()=>{});toast('That invite expired');return}
         }
         await update(ir,{status:'accepted'}).catch(()=>{});
-        toast('Game started - you are O');
+        toast('Game ready');
         enterRoom(iv.roomId,'O',false);
       },(silent)=>{
         update(ir,{status:silent?'expired':'declined'}).catch(()=>{});
@@ -476,6 +504,7 @@ Online.openLobby=openLobby;
 Online.debugInvite=(uid,nick)=>sendInvite(uid,nick,{disabled:false,textContent:'Invite'});
 
 async function boot(){
+  if($('#startok'))$('#startok').onclick=()=>$('#startnotice').close();
   $('#online').onclick=openLobby;
   $('#lclose').onclick=()=>$('#lobby').close();
   const rs=$('#reshuffle');
@@ -520,9 +549,12 @@ async function boot(){
   const swBtn=$('#swapseat');
   if(swBtn)swBtn.onclick=()=>{
     if(!room||spectate||seat!=='X'||(room.moveCount||0)>0||room.swapUsed||room.swapOffer)return;
-    update(ref(db,'rooms/'+roomId),{swapOffer:'X',swapOfferTs:serverTimestamp()}).catch(()=>{});
-    toast('Swap offer sent - waiting for answer');
-    setTimeout(()=>{get(ref(db,'rooms/'+roomId)).then(s=>{const v=s.val();if(v&&v.swapOffer==='X')update(ref(db,'rooms/'+roomId),{swapOffer:null}).catch(()=>{})})},33000);
+    const id=roomId,ts=nowSrv();
+    runTransaction(ref(db,'rooms/'+id),cur=>{
+      if(!cur||cur.status!=='playing'||(cur.moveCount||0)>0||cur.swapUsed||cur.swapOffer||cur.players?.X?.uid!==me.uid||Object.values(cur.players||{}).some(p=>p&&p.pending))return;
+      cur.swapOffer='X';cur.swapOfferTs=ts;cur.swapDeclinedBy=null;return cur;
+    },{applyLocally:false}).then(res=>{if(res.committed)toast('Swap offer sent - waiting for answer')}).catch(()=>{});
+    setTimeout(()=>{runTransaction(ref(db,'rooms/'+id),cur=>{if(!cur||cur.swapOffer!=='X'||cur.swapOfferTs!==ts)return;cur.swapOffer=null;return cur},{applyLocally:false}).catch(()=>{})},30000);
   };
   $('#leave').onclick=()=>{
     if(room&&!spectate&&room.status==='playing'){
@@ -538,10 +570,19 @@ async function boot(){
     const rr=ref(db,'rooms/'+join);
     const rv=(await get(rr)).val();
     if(!rv){toast('That room is closed');return}
-    if(q.get('as')==='host'&&rv.players&&rv.players.X&&rv.players.X.pending&&rv.players.X.uid!==me.uid){
-      // inviter from a site widget: the widget reserved seat X (its login differs from this page's), claim it now
-      await update(rr,{'players/X':{uid:me.uid,nick:myNick},host:me.uid}).catch(()=>{});
-      enterRoom(join,'X',false);
+    const pendingSeat=['X','O'].find(k=>rv.players&&rv.players[k]&&rv.players[k].pending);
+    if(q.get('as')==='host'&&pendingSeat){
+      // Widget and game have different anonymous logins. Claim the reserved person, not a fixed symbol.
+      let off=null;await new Promise(res=>{off=onValue(rr,()=>res());setTimeout(res,4000)});
+      const claimed=await runTransaction(rr,cur=>{
+        if(!cur)return;
+        const k=['X','O'].find(k=>cur.players&&cur.players[k]&&cur.players[k].pending);
+        if(!k)return;
+        cur.players[k]={uid:me.uid,nick:myNick};cur.host=me.uid;return cur;
+      },{applyLocally:false}).catch(()=>null);
+      if(off)off();
+      if(!claimed?.committed){toast('That host seat was already claimed');return}
+      enterRoom(join,pendingSeat,false);
     }
     else if(rv.players&&rv.players.X&&rv.players.X.uid===me.uid)enterRoom(join,'X',false);
     else if(rv.players&&rv.players.O&&rv.players.O.uid===me.uid)enterRoom(join,'O',false);
@@ -550,7 +591,7 @@ async function boot(){
       if(ok)enterRoom(join,'O',false);
       else{
         const rv2=(await get(rr)).val();
-        if(rv2&&rv2.players&&rv2.players.O&&rv2.players.O.uid===me.uid)enterRoom(join,'O',false);
+        if(rv2&&rv2.players&&['X','O'].some(k=>rv2.players[k]?.uid===me.uid))enterRoom(join,'O',false);
         else enterRoom(join,null,true);
       }
     }
