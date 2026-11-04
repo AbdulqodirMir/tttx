@@ -47,16 +47,21 @@ function copyText(txt,btn){
 function legacyCopy(txt){const i=$('#rlink');if(i&&i.value===txt){i.select();try{document.execCommand('copy')}catch(e){}}else{const t=document.createElement('textarea');t.value=txt;document.body.appendChild(t);t.select();try{document.execCommand('copy')}catch(e){}t.remove()}}
 function shareLink(){if(roomLink&&navigator.share)navigator.share({title:'TicTacToe Extended',text:'Play TicTacToe Extended with me',url:roomLink}).catch(()=>{})}
 const popOpen=e=>!!(e&&e.matches&&e.matches(':popover-open'));
+const INVITE_TTL=30000; // one invite lifetime everywhere: game lobby and site widget
 function toast(msg,ms=2600){const t=$('#toast');t.textContent=msg;if(!popOpen(t))t.showPopover();t.className='show';clearTimeout(t._h);t._h=setTimeout(()=>{t.className='';if(popOpen(t))t.hidePopover()},ms)}
 const wbShow=e=>{if(e)e.classList.add('on')};const wbHide=e=>{if(e)e.classList.remove('on')};
 function toastAsk(fromNick,accept,decline,life){
-  const t=$('#toast');t.innerHTML='';
+  const t=$('#toast');t.innerHTML='';clearInterval(t._cd);
   const s=document.createElement('span');s.textContent=pn(fromNick)+' invites you to play';
-  const a=document.createElement('button');a.textContent='Accept';a.className='ok';
+  const a=document.createElement('button');a.className='ok';
   const d=document.createElement('button');d.textContent='Decline';
-  a.onclick=()=>{t._ans=1;t.className='';if(popOpen(t))t.hidePopover();accept()};d.onclick=()=>{t._ans=1;t.className='';if(popOpen(t))t.hidePopover();decline()};
+  const end=Date.now()+Math.max(3000,life||INVITE_TTL);
+  const paint=()=>{const left=Math.max(0,Math.ceil((end-Date.now())/1000));a.textContent=left>0?('Accept \u00b7 '+left+'s'):'Accept'};
+  paint();t._cd=setInterval(paint,250);
+  const close=fn=>{t._ans=1;clearInterval(t._cd);clearTimeout(t._h);t.className='';if(popOpen(t))t.hidePopover();fn&&fn()};
+  a.onclick=()=>close(accept);d.onclick=()=>close(()=>decline(false));
   t.append(s,a,d);if(!popOpen(t))t.showPopover();t.className='show ask';t._ans=0;
-  clearTimeout(t._h);t._h=setTimeout(()=>{if(t.className){t._ans=1;t.className='';if(popOpen(t))t.hidePopover();decline(true)}},life||60000);
+  clearTimeout(t._h);t._h=setTimeout(()=>{if(t.className)close(()=>decline(true))},Math.max(3000,life||INVITE_TTL));
 }
 
 // ---------- presence ----------
@@ -353,7 +358,7 @@ async function sendInvite(toUid,toNick,btn){
   roomLink=location.origin+location.pathname+'?room='+id;
   const wb=$('#waitbar');wbShow(wb);
   const wspan=wb.querySelector('span');const t0=Date.now();
-  const tick=()=>{const left=Math.max(0,60-Math.floor((Date.now()-t0)/1000));wspan.textContent='Invited '+toNick+' - waiting for answer ('+left+'s)'};
+  const tick=()=>{const left=Math.max(0,30-Math.floor((Date.now()-t0)/1000));wspan.textContent='Invited '+toNick+' - waiting for answer ('+left+'s)'};
   tick();const cd=setInterval(tick,1000);
   const wc=$('#waitcancel');if(wc){wc.style.display='';wc.onclick=()=>{clearInterval(cd);update(ir,{status:'cancelled'}).catch(()=>{});remove(ref(db,'rooms/'+id)).catch(()=>{});if(sentInvite){sentInvite();sentInvite=null}wbHide(wb);wc.style.display='none';btn.disabled=false;btn.textContent='Invite';toast('Invite cancelled')}}
   const clearWait=()=>{clearInterval(cd);wbHide(wb);if(wc)wc.style.display='none'};
@@ -365,7 +370,7 @@ async function sendInvite(toUid,toNick,btn){
   sentInvite=onValue(rref,snap=>{
     const v=snap.val();if(!v)return;
     const o=v.players&&v.players.O;
-    if(o&&o.declined){stopWatch();clearWait();rearm();toast(toNick+(o.busy?' is already in a game':' declined'));remove(rref).catch(()=>{});update(ir,{status:o.busy?'busy':'declined'}).catch(()=>{})}
+    if(o&&o.declined){stopWatch();clearWait();rearm();toast(toNick+(o.busy?' is already in a game':(o.timeout?" didn't answer - invite expired":' declined')));remove(rref).catch(()=>{});update(ir,{status:o.busy?'busy':(o.timeout?'expired':'declined')}).catch(()=>{})}
     else if(o&&v.status==='playing'){stopWatch();clearWait();toast(toNick+' joined - game on!');enterRoom(id,'X',false)}
   });
   invWatch=onValue(ir,s=>{
@@ -379,17 +384,17 @@ async function sendInvite(toUid,toNick,btn){
     const stale=!pv||!pv.ts||(nowSrv()-pv.ts>90000); // dead tab leaves a stale row, not null
     if(stale){stopWatch();clearWait();rearm();toast(toNick+' went offline');update(ir,{status:'offline'}).catch(()=>{});remove(rref).catch(()=>{})}
   });
-  setTimeout(()=>{if(!sentInvite)return;get(rref).then(s=>{const v=s.val();if(v&&v.status==='waiting'&&!(v.players&&v.players.O)){stopWatch();clearWait();rearm();toast(toNick+" didn't respond in 60 s");update(ir,{status:'expired'}).catch(()=>{});remove(rref).catch(()=>{})}})},65000);
+  setTimeout(()=>{if(!sentInvite)return;get(rref).then(s=>{const v=s.val();if(v&&v.status==='waiting'&&!(v.players&&v.players.O)){stopWatch();clearWait();rearm();toast(toNick+" didn't answer - invite expired");update(ir,{status:'expired'}).catch(()=>{});remove(rref).catch(()=>{})}})},INVITE_TTL+3000);
 }
 function invitesOn(){
   onValue(ref(db,'invites/'+me.uid),snap=>{
     const v=snap.val()||{},now=nowSrv();
     for(const[k,iv]of Object.entries(v)){
-      if(!iv||iv.status!=='pending'||!iv.ts||now-iv.ts>60000)continue;
+      if(!iv||iv.status!=='pending'||!iv.ts||now-iv.ts>INVITE_TTL)continue;
       const ir=ref(db,'invites/'+me.uid+'/'+k);
       if(roomId){update(ir,{status:'busy'}).catch(()=>{});continue}
       if(iv._shown)continue;iv._shown=true;
-      const lim=iv.fromSite?28000:60000;if(now-iv.ts>lim)continue;
+      if(now-iv.ts>INVITE_TTL)continue;
       const tt=$('#toast');
       const offW=onValue(ir,sn=>{const x=sn.val();if(x&&x.status==='pending')return;offW();if(tt.className&&tt.classList.contains('ask')&&!tt._ans){tt._ans=1;clearTimeout(tt._h);tt.className='';if(popOpen(tt))tt.hidePopover();toast(pn(iv.fromNick||'Someone')+' cancelled the invite')}});
       toastAsk(iv.fromNick||'Someone',async()=>{
@@ -404,13 +409,14 @@ function invitesOn(){
         enterRoom(iv.roomId,'O',false);
       },(silent)=>{
         update(ir,{status:silent?'expired':'declined'}).catch(()=>{});
+        if(silent)toast('Invite from '+pn(iv.fromNick||'Someone')+' expired');
         if(!silent){
           // decline marker only while the room is still waiting for an O - never touch a live game
           get(ref(db,'rooms/'+iv.roomId)).then(s=>{const rv=s.val();
             if(rv&&rv.status==='waiting'&&!(rv.players&&rv.players.O))update(ref(db,'rooms/'+iv.roomId),{'players/O':{uid:me.uid,nick:myNick,declined:true}}).catch(()=>{});
           }).catch(()=>{});
         }
-      },lim-(now-iv.ts));
+      },INVITE_TTL-(now-iv.ts));
       break; // one toast at a time
     }
   });
