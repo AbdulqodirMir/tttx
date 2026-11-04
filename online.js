@@ -21,6 +21,64 @@ function devFp(){var n=navigator,s=screen,g='';try{var c=document.createElement(
 var MY_DK=devId(),MY_FP=devFp();
 function sameDev(p){return p&&((p.dk&&p.dk===MY_DK)||(p.fp&&p.fp===MY_FP))}
 
+// ---------- ratings (Elo, like chess) ----------
+// Preview storage: localStorage is the durable copy; presence carries the public display
+// copy ({r,g} on the heartbeat). Production design moves both to a ratings/{uid} node -
+// needs a Firebase rules addition, flagged for the owner before shipping.
+const ELO_START=1200,ELO_PLACE=10; // 10 placement games, then the number shows
+function eloK(g){return g<ELO_PLACE?40:20} // higher K while placing, chess-style
+function eloExp(ra,rb){return 1/(1+Math.pow(10,(rb-ra)/400))}
+function myElo(){try{const o=JSON.parse(localStorage.getItem('tttx-elo')||'null');if(o&&typeof o.r==='number')return o}catch(e){}return{r:ELO_START,g:0,w:0,l:0,d:0}}
+function saveElo(o){try{localStorage.setItem('tttx-elo',JSON.stringify(o))}catch(e){}}
+function eloShort(o){return !o||typeof o.r!=='number'?'':((o.g||0)<ELO_PLACE?'?':String(Math.round(o.r)))}
+let ratedKey=null;try{ratedKey=localStorage.getItem('tttx-elo-last')||null}catch(e){}
+function eloApply(oppR,oppG,score){ // score: 1 win, 0.5 draw, 0 loss
+  const e=myElo(),before=Math.round(e.r);
+  const delta=Math.round(eloK(e.g)*(score-eloExp(e.r,oppR)));
+  e.r=Math.max(100,e.r+delta);e.g++;
+  if(score===1)e.w++;else if(score===0)e.l++;else e.d++;
+  saveElo(e);
+  return{before,after:Math.round(e.r),delta:Math.round(e.r)-before,score,games:e.g};
+}
+function renderEloSelf(){
+  const el=$('#myelo');if(!el)return;
+  const e=myElo();
+  el.textContent=e.g<ELO_PLACE?('Elo · placement '+e.g+'/'+ELO_PLACE):('Elo '+Math.round(e.r));
+  el.style.display='';
+}
+// A room is rated when both seats are real players on different devices
+// (localStorage tttx-rated-debug=1 bypasses the device check, for testing).
+function roomRated(v){
+  const px=v.players&&v.players.X,po=v.players&&v.players.O;
+  if(!px||!po||px.declined||po.declined)return false;
+  if(localStorage.getItem('tttx-rated-debug')==='1')return true;
+  return !((px.dk&&px.dk===po.dk)||(px.fp&&px.fp===po.fp));
+}
+// Apply Elo once per finished game. Snapshots live on the room's player entries, so both
+// clients compute identical deltas. Returns the delta object when rated, null otherwise.
+function maybeRate(v,id,gid,forfeit){
+  if(spectate||!seat||v.status!=='playing')return null;
+  const w=v.state&&v.state.winner;
+  if(!w&&!forfeit)return null;
+  const key=id+':'+gid;
+  if(ratedKey===key)return null;
+  const mine=v.players&&v.players[seat],opp=v.players&&v.players[otherSeat()];
+  if(!mine||!opp||opp.declined)return null;
+  if(typeof mine.r!=='number'||typeof opp.r!=='number')return null; // opponent on an old build
+  if(!roomRated(v))return null; // same device - friendly game, stays unrated
+  if(forfeit&&(v.moveCount||0)<8)return null; // too little played to count
+  ratedKey=key;try{localStorage.setItem('tttx-elo-last',key)}catch(e){}
+  const res=eloApply(opp.r,opp.g,w?(w==='D'?0.5:(w===seat?1:0)):1);
+  res.placement=res.games<=ELO_PLACE;res.forfeit=!!forfeit;
+  Online.lastDelta=res;
+  const e=myElo();
+  update(ref(db,'rooms/'+id+'/players/'+seat),{r:e.r,g:e.g}).catch(()=>{}); // fresh snapshot for the rematch
+  update(ref(db,'presence/'+me.uid),{r:e.r,g:e.g}).catch(()=>{}); // publish now, not on the next beat
+  renderEloSelf();
+  if(forfeit)toast(pn(opp.nick||'Opponent')+' left - you win by forfeit ('+(res.delta>=0?'+':'')+res.delta+' Elo)');
+  return res;
+}
+
 const rid=()=>{const a='abcdefghjkmnpqrstuvwxyz23456789';let s='';for(let i=0;i<6;i++)s+=a[Math.random()*a.length|0];return s};
 
 let tOff=0;
@@ -71,7 +129,7 @@ async function presenceOn(){
   onValue(ref(db,'.info/serverTimeOffset'),s=>{tOff=s.val()||0});
   const p=ref(db,'presence/'+me.uid);
   const hide=localStorage.getItem('tttx-hide')==='1';
-  const beat=()=>set(p,{nick:myNick,ts:serverTimestamp(),hide,room:roomId||null,dk:MY_DK,fp:MY_FP});
+  const beat=()=>{const e=myElo();set(p,{nick:myNick,ts:serverTimestamp(),hide,room:roomId||null,dk:MY_DK,fp:MY_FP,r:e.r,g:e.g})};
   beat();onDisconnect(p).remove();
   clearInterval(hb);hb=setInterval(beat,25000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)beat()});
@@ -87,7 +145,7 @@ async function presenceOn(){
       const row=document.createElement('div');row.className='pitem';
       const dot=document.createElement('span');dot.className='dot'+(p.room?' busy':'');
       const n=document.createElement('span');n.className='nick';n.textContent=pn(p.nick)+((list.filter(([,q])=>pn(q.nick)===pn(p.nick)).length>1&&pn(p.nick)!==p.nick)?' #'+p.nick.slice(-2):'');
-      const st=document.createElement('span');st.className='st';st.textContent=(p.room?'· in a game':'· free')+(p.site?' · on '+p.site:'');
+      const st=document.createElement('span');st.className='st';st.textContent=(p.room?'· in a game':'· free')+(p.site?' · on '+p.site:'')+(eloShort(p)?' · '+eloShort(p):'');
       const b=document.createElement('button');
       if(p.room){b.textContent='In a game';b.disabled=true}
       else{b.textContent='Invite';b.onclick=()=>sendInvite(u,p.nick,b)}
@@ -105,7 +163,7 @@ async function createRoom(){
     const id=rid(),r=ref(db,'rooms/'+id);
     if((await get(r)).exists())continue;
     // pin the host's ruleset so both sides adjudicate identically
-    await set(r,{createdAt:serverTimestamp(),status:'waiting',host:me.uid,cfg:{rule:(T().cfg&&T().cfg.rule)||'line'},gameId:1,players:{X:{uid:me.uid,nick:myNick},O:null},state:freshState(),anim:null,moveCount:0,score:{X:0,O:0,D:0}});
+    const e0=myElo();await set(r,{createdAt:serverTimestamp(),status:'waiting',host:me.uid,cfg:{rule:(T().cfg&&T().cfg.rule)||'line'},gameId:1,players:{X:{uid:me.uid,nick:myNick,dk:MY_DK,fp:MY_FP,r:e0.r,g:e0.g},O:null},state:freshState(),anim:null,moveCount:0,score:{X:0,O:0,D:0}});
     update(ref(db,'rate/'+me.uid),{lastRoom:Date.now()});
     return id;
   }
@@ -124,8 +182,9 @@ async function claimSeatO(id){
       if(cur.status!=='waiting')return;      // already started
       if(cur.players&&cur.players.O)return;  // seat taken
       cur.players=cur.players||{};
-      cur.players.O={uid:me.uid,nick:myNick};
-      cur.status='playing';
+      const e1=myElo();
+    cur.players.O={uid:me.uid,nick:myNick,dk:MY_DK,fp:MY_FP,r:e1.r,g:e1.g};
+    cur.status='playing';
       return cur;
     });
     return !!(res&&res.committed);
@@ -162,6 +221,7 @@ function stopOppWatch(){
 function oppLeftCleanup(id,oppNick){
   stopOppWatch();
   if(roomId!==id)return;
+  if(room&&room.state&&!room.state.winner)maybeRate(room,id,room.gameId||1,true);
   remove(ref(db,'rooms/'+id)).catch(()=>{});
   // the room listener fires with null and does the UI cleanup + toast
 }
@@ -214,7 +274,7 @@ function enterRoom(id,asSeat,spec,keepLobby){
   }
   const r=ref(db,'rooms/'+id);
   if(roomOff)roomOff();
-  let prevOffer=null, promptForTs=0;
+  let prevOffer=null, promptForTs=0, quitSkipToast=false;
   roomOff=onValue(r,snap=>{
     const v=snap.val();
     if(!v){
@@ -222,7 +282,8 @@ function enterRoom(id,asSeat,spec,keepLobby){
         const hadOpp=room.players&&room.players.X&&room.players.O;
         const oppNick=hadOpp?(pn((room.players[seat==='X'?'O':'X']||{}).nick||'Opponent')):'Opponent';
         cleanupRoom();
-        toast(hadOpp?oppNick+' left - back to local play':'Room closed');
+        if(!quitSkipToast)toast(hadOpp?oppNick+' left - back to local play':'Room closed');
+        quitSkipToast=false;
       }
       return
     }
@@ -234,7 +295,7 @@ function enterRoom(id,asSeat,spec,keepLobby){
     if(!spec&&v.status==='waiting'){wb.querySelector('span').textContent='Room ready - send this link, then stay on this page';const wcx=$('#waitcancel');if(wcx)wcx.style.display='none'}
     if(!spec&&v.status==='playing'){const lb=$('#lobby');if(lb.open)lb.close()}
     $('#leave').textContent=spec?'Leave':(v.host===me.uid?'Close room':'Leave game');
-    if(!oppGone)$('#onick').textContent=spectate?'Spectating':(opp&&opp.nick?('vs '+pn(opp.nick)):'Waiting for opponent…');
+    if(!oppGone)$('#onick').textContent=spectate?'Spectating':(opp&&opp.nick?('vs '+pn(opp.nick)+(eloShort(opp)?' · '+eloShort(opp):'')):'Waiting for opponent…');
     T().setOnlineRule(v.cfg&&v.cfg.rule||null);
     if(v.score){const s=T().score;s.X=v.score.X||0;s.O=v.score.O||0;s.D=v.score.D||0}
     handleOppGone(v,id);
@@ -281,9 +342,16 @@ function enterRoom(id,asSeat,spec,keepLobby){
     }
     // game state: apply only genuinely new snapshots; never rewind past what we already have
     const gid=v.gameId||1;
-    if(gid!==seenGameId){seenGameId=gid;seenMC=-1;if(v.state)applyServerState(v,true)}
+    // explicit quit: the leaver flagged the room before closing it
+    if(v.forfeitBy&&seat&&v.forfeitBy!==seat&&!spec){
+      quitSkipToast=!!maybeRate(v,id,gid,true);
+      remove(ref(db,'rooms/'+id)).catch(()=>{});
+      return;
+    }
+    if(gid!==seenGameId){seenGameId=gid;seenMC=-1;Online.lastDelta=null;if(v.state)applyServerState(v,true)}
     else if(v.state&&typeof v.moveCount==='number'&&v.moveCount>seenMC){applyServerState(v,false)}
     else T().render(); // refresh names/seat/chip/lock even when no move landed
+    if(v.state&&v.state.winner)maybeRate(v,id,gid,false);
     // rematch handshake: both flagged -> host resets atomically with swapped seats
     if(v.rematch&&v.rematch.X&&v.rematch.O&&v.host===me.uid&&!spec){
       runTransaction(r,cur=>{
@@ -313,8 +381,15 @@ function cleanupRoom(){
 function leaveRoom(){
   const r=room,id=roomId;
   const iPlay=r&&id&&!spectate&&r.players&&((r.players.X&&r.players.X.uid===me.uid)||(r.players.O&&r.players.O.uid===me.uid));
+  const midGame=iPlay&&r.status==='playing'&&!(r.state&&r.state.winner),mySeat=seat;
   cleanupRoom();
-  if(iPlay)remove(ref(db,'rooms/'+id)).catch(()=>{});
+  if(iPlay){
+    if(midGame){
+      // flag the quit first so the opponent can count it as a forfeit win, then close
+      update(ref(db,'rooms/'+id),{forfeitBy:mySeat,forfeitTs:serverTimestamp()}).catch(()=>{});
+      setTimeout(()=>remove(ref(db,'rooms/'+id)).catch(()=>{}),4000);
+    }else remove(ref(db,'rooms/'+id)).catch(()=>{});
+  }
 }
 Online.leave=leaveRoom;
 Online.names=function(){if(!room)return null;const px=room.players&&room.players.X,po=room.players&&room.players.O;return{X:px&&pn(px.nick)||'\u2026',O:po&&pn(po.nick)||'\u2026'}};
@@ -470,6 +545,7 @@ async function openLobby(){
   if(roomLink){$('#rlink').value=roomLink;$('#rlinkrow').style.display='flex'}
   $('#mynick').textContent=myNick;
   $('#offlineTgl').checked=localStorage.getItem('tttx-hide')==='1';
+  renderEloSelf();
   if(!me)await presenceOn();
 }
 Online.openLobby=openLobby;
@@ -540,7 +616,7 @@ async function boot(){
     if(!rv){toast('That room is closed');return}
     if(q.get('as')==='host'&&rv.players&&rv.players.X&&rv.players.X.pending&&rv.players.X.uid!==me.uid){
       // inviter from a site widget: the widget reserved seat X (its login differs from this page's), claim it now
-      await update(rr,{'players/X':{uid:me.uid,nick:myNick},host:me.uid}).catch(()=>{});
+      const e2=myElo();await update(rr,{'players/X':{uid:me.uid,nick:myNick,dk:MY_DK,fp:MY_FP,r:e2.r,g:e2.g},host:me.uid}).catch(()=>{});
       enterRoom(join,'X',false);
     }
     else if(rv.players&&rv.players.X&&rv.players.X.uid===me.uid)enterRoom(join,'X',false);
