@@ -12,7 +12,8 @@ const rid=()=>{const a='abcdefghjkmnpqrstuvwxyz23456789';let s='';for(let i=0;i<
 let tOff=0;
 let me=null, myNick=localStorage.getItem('tttx-nick')||nick();
 localStorage.setItem('tttx-nick',myNick);
-let room=null, roomId=null, seat=null, spectate=false, seenMC=-1, roomOff=null, inviteOff=null, sentInvite=null;
+let room=null, roomId=null, seat=null, spectate=false, seenMC=-1, roomOff=null, inviteOff=null, sentInvite=null, sentUI=null;
+const INVITE_TTL=30000; // shared with the site widget: invites live 30s, sender sweeps at +3s
 let hb=0;
 
 const Online={active:()=>!!room, seat:()=>seat, spectating:()=>spectate};
@@ -27,15 +28,23 @@ function copyText(txt,btn){
 }
 function legacyCopy(txt){const i=$('#rlink');if(i&&i.value===txt){i.select();try{document.execCommand('copy')}catch(e){}}else{const t=document.createElement('textarea');t.value=txt;document.body.appendChild(t);t.select();try{document.execCommand('copy')}catch(e){}t.remove()}}
 function shareLink(){if(roomLink&&navigator.share)navigator.share({title:'TicTacToe Extended',text:'Play TicTacToe Extended with me',url:roomLink}).catch(()=>{})}
-function toast(msg,ms=2600){const t=$('#toast');t.textContent=msg;t.className='show';clearTimeout(t._h);t._h=setTimeout(()=>t.className='',ms)}
-function toastAsk(fromNick,accept,decline){
-  const t=$('#toast');t.innerHTML='';
+function toastPop(t,on){try{if(on){if(!t.matches(':popover-open'))t.showPopover()}else if(t.matches(':popover-open'))t.hidePopover()}catch(e){}}
+function toast(msg,ms=2600){const t=$('#toast');clearTimeout(t._h);clearInterval(t._cd);t.textContent=msg;t.className='show';toastPop(t,true);t._h=setTimeout(()=>{t.className='';toastPop(t,false)},ms)}
+function toastAsk(fromNick,accept,decline,ttl){
+  const t=$('#toast');
+  clearTimeout(t._h);clearInterval(t._cd);
+  t.innerHTML='';
   const s=document.createElement('span');s.textContent=fromNick+' invites you to play';
-  const a=document.createElement('button');a.textContent='Accept';a.className='ok';
+  const a=document.createElement('button');a.className='ok';
   const d=document.createElement('button');d.textContent='Decline';
-  a.onclick=()=>{t.className='';accept()};d.onclick=()=>{t.className='';decline()};
-  t.append(s,a,d);t.className='show ask';
-  clearTimeout(t._h);t._h=setTimeout(()=>{if(t.className)t.className='',decline(true)},60000);
+  const end=Date.now()+Math.max(3000,ttl||INVITE_TTL);
+  const paint=()=>{const left=Math.max(0,Math.ceil((end-Date.now())/1000));a.textContent=left>0?('Accept · '+left+'s'):'Accept'};
+  paint();t._cd=setInterval(paint,250);
+  const close=fn=>{clearInterval(t._cd);clearTimeout(t._h);t.className='';toastPop(t,false);fn&&fn()};
+  a.onclick=()=>close(accept);
+  d.onclick=()=>close(()=>decline(false));
+  t.append(s,a,d);t.className='show ask';toastPop(t,true);
+  t._h=setTimeout(()=>close(()=>decline(true)),Math.max(3000,ttl||INVITE_TTL));
 }
 
 // ---------- presence ----------
@@ -60,6 +69,7 @@ async function presenceOn(){
       const n=document.createElement('span');n.textContent=p.nick+(p.room?' · in a game':'');
       const b=document.createElement('button');b.textContent='Invite';
       b.onclick=()=>sendInvite(u,p.nick,b);
+      if(sentUI&&sentUI.toUid===u){sentUI.btn=b;b.disabled=true;b.textContent='Sent · '+Math.max(0,Math.ceil((sentUI.end-Date.now())/1000))+'s'}
       row.append(n,b);el.appendChild(row);
     }
   });
@@ -187,31 +197,39 @@ async function sendInvite(toUid,toNick,btn){
   const ir=push(ref(db,'invites/'+toUid));
   await set(ir,{from:me.uid,fromNick:myNick,roomId:id,ts:serverTimestamp(),status:'pending'});
   update(ref(db,'rate/'+me.uid),{lastInvite:Date.now()});
-  btn.disabled=true;btn.textContent='Sent';
+  btn.disabled=true;
+  const end=Date.now()+INVITE_TTL;
+  sentUI={toUid,btn,end,iv:setInterval(()=>{
+    const left=Math.max(0,Math.ceil((end-Date.now())/1000));
+    if(sentUI&&sentUI.btn.isConnected)sentUI.btn.textContent=left>0?('Sent · '+left+'s'):'Sent';
+  },250)};
+  btn.textContent='Sent · 30s';
   toast('Invite sent to '+toNick);
+  const clearSent=()=>{if(!sentUI)return;clearInterval(sentUI.iv);const b=sentUI.btn;sentUI=null;if(b.isConnected){b.disabled=false;b.textContent='Invite'}};
   if(sentInvite)sentInvite();
   sentInvite=onValue(ir,snap=>{
     const v=snap.val();if(!v)return;
-    if(v.status==='accepted'){sentInvite();sentInvite=null;enterRoom(id,'X',false)}
-    else if(v.status==='declined'||v.status==='expired'){sentInvite();sentInvite=null;toast(toNick+(v.status==='declined'?' declined':' did not answer'));remove(ref(db,'rooms/'+id)).catch(()=>{})}
+    if(v.status==='accepted'){sentInvite();sentInvite=null;clearSent();enterRoom(id,'X',false)}
+    else if(v.status==='declined'||v.status==='expired'){sentInvite();sentInvite=null;clearSent();toast(toNick+(v.status==='declined'?' declined':' did not answer - invite expired'));remove(ref(db,'rooms/'+id)).catch(()=>{})}
   });
-  setTimeout(()=>{get(ir).then(s=>{const v=s.val();if(v&&v.status==='pending'){update(ir,{status:'expired'});remove(ref(db,'rooms/'+id)).catch(()=>{})}})},65000);
+  setTimeout(()=>{get(ir).then(s=>{const v=s.val();if(v&&v.status==='pending'){update(ir,{status:'expired'});remove(ref(db,'rooms/'+id)).catch(()=>{})}})},INVITE_TTL+3000);
 }
 function invitesOn(){
   onValue(ref(db,'invites/'+me.uid),snap=>{
-    const v=snap.val()||{},now=Date.now();
+    const v=snap.val()||{},now=Date.now()+tOff;
     for(const[k,iv]of Object.entries(v)){
-      if(!iv||iv.status!=='pending'||!iv.ts||now-iv.ts>60000)continue;
+      if(!iv||iv.status!=='pending'||!iv.ts||now-iv.ts>INVITE_TTL)continue;
       const ir=ref(db,'invites/'+me.uid+'/'+k);
       if(iv._shown)continue;iv._shown=true;
-      toastAsk(iv.fromNick||'Someone',async()=>{
+      const nm=iv.fromNick||'Someone';
+      toastAsk(nm,async()=>{
         const rr=ref(db,'rooms/'+iv.roomId);
         const rv=(await get(rr)).val();
         if(!rv||rv.status!=='waiting'||(rv.players&&rv.players.O)){update(ir,{status:'expired'});toast('That invite expired');return}
         await update(rr,{'players/O':{uid:me.uid,nick:myNick},status:'playing'});
         await update(ir,{status:'accepted'});
         enterRoom(iv.roomId,'O',false);
-      },(silent)=>{update(ir,{status:silent?'expired':'declined'}).catch(()=>{})});
+      },(silent)=>{update(ir,{status:silent?'expired':'declined'}).catch(()=>{});if(silent)toast('Invite from '+nm+' expired')},INVITE_TTL-(now-iv.ts));
       break; // one toast at a time
     }
   });
