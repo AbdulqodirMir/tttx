@@ -50,9 +50,9 @@ const popOpen=e=>!!(e&&e.matches&&e.matches(':popover-open'));
 const INVITE_TTL=30000; // one invite lifetime everywhere: game lobby and site widget
 function toast(msg,ms=2600){const t=$('#toast');t.textContent=msg;if(!popOpen(t))t.showPopover();t.className='show';clearTimeout(t._h);t._h=setTimeout(()=>{t.className='';if(popOpen(t))t.hidePopover()},ms)}
 const wbShow=e=>{if(e)e.classList.add('on')};const wbHide=e=>{if(e)e.classList.remove('on')};
-function toastAsk(fromNick,accept,decline,life){
+function toastAsk(msg,accept,decline,life){
   const t=$('#toast');t.innerHTML='';clearInterval(t._cd);
-  const s=document.createElement('span');s.textContent=pn(fromNick)+' invites you to play';
+  const s=document.createElement('span');s.textContent=msg;
   const a=document.createElement('button');a.className='ok';
   const d=document.createElement('button');d.textContent='Decline';
   const end=Date.now()+Math.max(3000,life||INVITE_TTL);
@@ -214,6 +214,7 @@ function enterRoom(id,asSeat,spec,keepLobby){
   }
   const r=ref(db,'rooms/'+id);
   if(roomOff)roomOff();
+  let prevOffer=null, promptForTs=0;
   roomOff=onValue(r,snap=>{
     const v=snap.val();
     if(!v){
@@ -237,6 +238,47 @@ function enterRoom(id,asSeat,spec,keepLobby){
     T().setOnlineRule(v.cfg&&v.cfg.rule||null);
     if(v.score){const s=T().score;s.X=v.score.X||0;s.O=v.score.O||0;s.D=v.score.D||0}
     handleOppGone(v,id);
+    // seat swap: X may hand the X seat (first move) to O once per room
+    const sw=$('#swapseat');
+    if(sw){
+      const canOffer=!spec&&v.status==='playing'&&seat==='X'&&(v.moveCount||0)===0&&!(v.state&&v.state.winner)&&!v.swapUsed&&!v.swapOffer;
+      const offered=seat==='X'&&v.swapOffer==='X'&&!v.swapUsed;
+      sw.style.display=(canOffer||offered)?'':'none';
+      if(canOffer){sw.disabled=false;sw.textContent='Give X seat';clearInterval(sw._cd);sw._cd=0}
+      if(offered){
+        sw.disabled=true;
+        if(!sw._cd){const t0=nowSrv();sw._cd=setInterval(()=>{const left=Math.max(0,30-Math.floor((nowSrv()-t0)/1000));sw.textContent='Offered \u00b7 '+left+'s'},250)}
+      }else if(sw._cd){clearInterval(sw._cd);sw._cd=0}
+      // resolution feedback for the player who offered
+      if(prevOffer==='X'&&v.swapOffer!=='X'){
+        if(v.swapUsed)toast(pn(opp&&opp.nick||'Opponent')+' took the X seat - you are O now');
+        else if(v.swapDeclinedBy)toast(pn(opp&&opp.nick||'Opponent')+' declined the swap');
+        else if(!sw._cd)toast('No answer - swap offer cancelled');
+      }
+      prevOffer=v.swapOffer||null;
+      // prompt for the O player
+      if(!spec&&seat==='O'&&v.swapOffer==='X'&&v.status==='playing'&&promptForTs!==(v.swapOfferTs||0)){
+        promptForTs=v.swapOfferTs||0;
+        const oppNick=pn((v.players.X||{}).nick||'Opponent');
+        toastAsk(oppNick+" offers you the X seat (first move)",async()=>{
+          const res=await runTransaction(r,cur=>{
+            if(!cur||cur.swapOffer!=='X'||cur.swapUsed||(cur.moveCount||0)>0||cur.status!=='playing')return;
+            const px=cur.players&&cur.players.X,po=cur.players&&cur.players.O;
+            if(!px||!po)return;
+            cur.players={X:po,O:px};
+            const sc=cur.score||{X:0,O:0,D:0};
+            cur.score={X:sc.O||0,O:sc.X||0,D:sc.D||0};
+            cur.swapOffer=null;cur.swapUsed=true;
+            return cur;
+          }).catch(()=>null);
+          if(res&&res.committed)toast('You are X now - your move');
+          else toast('That swap offer expired');
+        },(silent)=>{
+          update(r,{swapOffer:null,...(silent?{}:{swapDeclinedBy:true})}).catch(()=>{});
+          if(!silent)toast('You kept the O seat');
+        },Math.max(3000,30000-(nowSrv()-(v.swapOfferTs||nowSrv()))));
+      }
+    }
     // game state: apply only genuinely new snapshots; never rewind past what we already have
     const gid=v.gameId||1;
     if(gid!==seenGameId){seenGameId=gid;seenMC=-1;if(v.state)applyServerState(v,true)}
@@ -397,7 +439,7 @@ function invitesOn(){
       if(now-iv.ts>INVITE_TTL)continue;
       const tt=$('#toast');
       const offW=onValue(ir,sn=>{const x=sn.val();if(x&&x.status==='pending')return;offW();if(tt.className&&tt.classList.contains('ask')&&!tt._ans){tt._ans=1;clearTimeout(tt._h);tt.className='';if(popOpen(tt))tt.hidePopover();toast(pn(iv.fromNick||'Someone')+' cancelled the invite')}});
-      toastAsk(iv.fromNick||'Someone',async()=>{
+      toastAsk(pn(iv.fromNick||'Someone')+' invites you to play',async()=>{
         const ok=await claimSeatO(iv.roomId);
         if(!ok){
           const rv=(await get(ref(db,'rooms/'+iv.roomId))).val();
@@ -475,6 +517,12 @@ async function boot(){
   $('#waitcopy').onclick=()=>copyText(roomLink||$('#rlink').value,$('#waitcopy'));
   if(navigator.share){$('#sharelink').style.display='';$('#waitshare').style.display=''}
   $('#sharelink').onclick=shareLink;$('#waitshare').onclick=shareLink;
+  $('#swapseat').onclick=()=>{
+    if(!room||spectate||seat!=='X'||(room.moveCount||0)>0||room.swapUsed||room.swapOffer)return;
+    update(ref(db,'rooms/'+roomId),{swapOffer:'X',swapOfferTs:serverTimestamp()}).catch(()=>{});
+    toast('Swap offer sent - waiting for answer');
+    setTimeout(()=>{get(ref(db,'rooms/'+roomId)).then(s=>{const v=s.val();if(v&&v.swapOffer==='X')update(ref(db,'rooms/'+roomId),{swapOffer:null}).catch(()=>{})})},33000);
+  };
   $('#leave').onclick=()=>{
     if(room&&!spectate&&room.status==='playing'){
       const host=room.host===me.uid;
