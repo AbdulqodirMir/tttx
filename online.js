@@ -517,7 +517,8 @@ async function boot(){
   $('#waitcopy').onclick=()=>copyText(roomLink||$('#rlink').value,$('#waitcopy'));
   if(navigator.share){$('#sharelink').style.display='';$('#waitshare').style.display=''}
   $('#sharelink').onclick=shareLink;$('#waitshare').onclick=shareLink;
-  $('#swapseat').onclick=()=>{
+  const swBtn=$('#swapseat');
+  if(swBtn)swBtn.onclick=()=>{
     if(!room||spectate||seat!=='X'||(room.moveCount||0)>0||room.swapUsed||room.swapOffer)return;
     update(ref(db,'rooms/'+roomId),{swapOffer:'X',swapOfferTs:serverTimestamp()}).catch(()=>{});
     toast('Swap offer sent - waiting for answer');
