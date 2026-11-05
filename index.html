@@ -24,6 +24,11 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-mark-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TTTX">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin><link rel="dns-prefetch" href="https://www.gstatic.com">
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=Instrument+Serif:ital@0;1&family=Onest:wght@400..700&family=Cormorant+Garamond:ital,wght@0,500;1,500&display=swap">
@@ -315,14 +320,18 @@ footer a:hover{opacity:.7}
   body{min-height:100svh}
   #status{margin-top:clamp(24px,5.5svh,48px)}
   main{padding:2px 5px 6px}
-  .pillrow{margin-top:clamp(24px,6.5svh,56px);flex-wrap:nowrap;gap:8px}
-  .pillrow button{padding:12px 12px;font-size:13px}
+  .pillrow{margin-top:clamp(24px,6.5svh,56px);flex-wrap:nowrap;gap:6px}
+  .pillrow button{padding:12px 10px;font-size:13px}
   #capline{display:none}
   /* invite banner up: relax the spread so the banner stays fully on screen */
   body:has(#waitbar.on) #status{margin-top:0}
   body:has(#waitbar.on) .pillrow{margin-top:2px}
   body:has(#waitbar.on) #waitbar{margin:4px 12px 6px}
   body:has(#waitbar.on) #hintrow{display:none}
+}
+@media (max-width:359px){
+  .pillrow{flex-wrap:wrap;gap:8px}
+  .pillrow button{padding:12px 12px}
 }
 @media(min-width:641px){
  body{--board:min(72vw,calc(66.6667svh + 6.6667px),calc(100svh - var(--top) - var(--sg) - 125px));--top:clamp(76px,11.75svh,94px);--sg:clamp(20px,calc(13.333svh - 66.667px),40px);min-height:100svh}
@@ -385,6 +394,18 @@ body.game-focus .aurora{opacity:.3}
 body.game-focus header:focus-within,body.game-focus .pillrow:focus-within{opacity:1}
 @media(prefers-reduced-motion:reduce){header,#status,.pillrow,#hintrow,#obar,.blob,.aurora,.stars{transition:none}}
 body.table-playing #big .box,body.table-playing #big .box.dim{opacity:1!important}body.table-playing #big .cell:empty{background:rgba(245,243,238,.15)}
+
+#installtoast{position:fixed;left:16px;right:16px;bottom:max(20px,env(safe-area-inset-bottom));z-index:60;display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:24px;background:rgba(10,12,24,.92);border:1px solid rgba(245,243,238,.2);box-shadow:0 24px 80px rgba(0,0,0,.55);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);max-width:430px;margin:0 auto;box-sizing:border-box}
+#installtoast[hidden],#installbtn[hidden]{display:none}
+#installtoast img{border-radius:10px;flex:none}
+#installtoast .ittext{flex:1;min-width:0}
+#installtoast .ittitle{font-size:13px;font-weight:600;color:var(--tx)}
+#installtoast .itsub{font-size:11px;color:var(--dim);margin-top:2px}
+#installtoast #itgo{flex:none;border-radius:999px;padding:8px 14px;font-size:12px}
+#installtoast #itx{flex:none;background:none;border:none;color:var(--dim);font-size:16px;cursor:pointer;padding:2px 4px}
+.ihstep{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--tx);margin:12px 0}
+.ihstep .ihn{color:var(--o);font-weight:700;flex:none}
+.ihstep svg{vertical-align:-2px}
 </style>
 </head>
 <body>
@@ -401,7 +422,7 @@ body.table-playing #big .box,body.table-playing #big .box.dim{opacity:1!importan
   <span class="turn" id="chip">X to move</span>
 </div>
 <main><div id="big"></div></main>
-<div class="pillrow"><button id="share2" class="solid" style="display:none">Share result</button><button id="playbtn" class="acc">Play online</button><button id="new">New game</button><button id="howbtn">How it works</button></div>
+<div class="pillrow"><button id="share2" class="solid" style="display:none">Share result</button><button id="playbtn" class="acc">Play online</button><button id="new">New game</button><button id="howbtn">How it works</button><button id="installbtn" title="Add to Home Screen" hidden><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px"><path d="M12 3v11"/><path d="M7.5 9.5L12 14l4.5-4.5"/><path d="M4.5 17.5v1.6a1.9 1.9 0 0 0 1.9 1.9h11.2a1.9 1.9 0 0 0 1.9-1.9v-1.6"/></svg>Install</button></div>
 <div id="hintrow"><span id="hint"></span><span id="score"></span></div><div id="capline"><span></span></div>
 
 <dialog id="dlg" class="wide">
@@ -434,6 +455,18 @@ body.table-playing #big .box,body.table-playing #big .box.dim{opacity:1!importan
 <div id="waitbar"><span>Room ready - send this link, then stay on this page</span><button id="waitcopy">Copy link</button><button id="waitshare" class="ghost" style="display:none">Share</button><button id="waitcancel" class="ghost" style="display:none">Cancel invite</button></div>
 <div id="toast" popover="manual"></div>
 
+<dialog id="installhelp">
+  <h2>Install the <em>game</em></h2>
+  <p id="ihsub"></p>
+  <div id="ihsteps"></div>
+  <div class="row"><button id="ihok" class="acc">Got it</button></div>
+</dialog>
+<div id="installtoast" hidden>
+  <img src="favicon-32.png" width="34" height="34" alt="">
+  <div class="ittext"><div class="ittitle" id="ittitle"></div><div class="itsub" id="itsub"></div></div>
+  <button id="itgo" class="solid">Install</button>
+  <button id="itx" aria-label="Not now">&times;</button>
+</div>
 <dialog id="lobby">
   <h2 tabindex="-1" autofocus>Play <em>online</em></h2>
   <div class="nickrow"><span class="dim">You are <b id="mynick"></b></span><button id="reshuffle" title="Generate a random player name" aria-label="Generate a random player name">Random name</button></div><p class="dim edit" style="margin:4px 0 0;font-size:11px">Tap your name to edit it</p>
@@ -806,7 +839,7 @@ function move(b,i){
   if(G.winner)setTimeout(showOver,overDelay());
   else maybeCpu();
 }
-function record(){score[G.winner]++}
+function record(){score[G.winner]++;InstallNote.finished(G.winner)}
 function maybeCpu(){
   if(cfg.mode!=='cpu'||G.winner||G.turn!=='O')return;
   if(window.Online&&Online.active())return;
@@ -876,7 +909,7 @@ for(const[id,k]of[['segMode','mode'],['segRule','rule'],['segFirst','first'],['s
     cfg[k]=v;syncSeg();persist();
     if(k==='rule')render(); // box badges/lines reflect the new capture rule at once
   });
-for(const d of['dlg','over','lobby']){const el=$('#'+d);el.addEventListener('click',e=>{if(e.target===el&&!document.querySelector('#mynickedit'))el.close()})}
+for(const d of['dlg','over','lobby','installhelp']){const el=$('#'+d);el.addEventListener('click',e=>{if(e.target===el&&!document.querySelector('#mynickedit'))el.close()})}
 $('#menu').onclick=()=>{syncSeg();$('#dlg').showModal()};
 $('#playbtn').onclick=()=>$('#online').click();
 $('#howbtn').onclick=()=>{syncSeg();$('#dlg').showModal()};
@@ -910,6 +943,80 @@ build();
 if(saved.game&&saved.game.cells){G=saved.game;G.hist=G.hist||[];G.redo=[];G.maxChain=G.maxChain||0;if(!G.echo)G.echo=Array.from({length:9},()=>Array(9).fill(0));}else G=fresh();
 syncSeg();render();maybeCpu();
 addEventListener('resize',()=>render());
+
+// --- Add to Home Screen: header chip, per-platform install sheet, one-time toast ---
+const InstallNote=(()=>{
+  const KEY='tttx_install';
+  const load=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){return{}}};
+  const save=x=>{try{localStorage.setItem(KEY,JSON.stringify(x))}catch(e){}};
+  let st=Object.assign({games:0,streak:0,lastSeat:'',shown:false},load());
+  let deferred=null;
+  const ua=navigator.userAgent;
+  const isIOS=/iphone|ipad|ipod/i.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  const installed=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+  const demo=new URLSearchParams(location.search).get('toast'); // demo hooks: ?toast=games|streak|reset
+  if(demo==='reset'){st={games:0,streak:0,lastSeat:'',shown:false};save(st)}
+  addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferred=e});
+  addEventListener('appinstalled',()=>{syncChip();hideToast()});
+  const dmm=matchMedia('(display-mode: standalone)');if(dmm.addEventListener)dmm.addEventListener('change',syncChip);
+  function syncChip(){const b=$('#installbtn');if(b)b.hidden=installed()}
+  const icoShare='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8fb4ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M7.5 7.5L12 3l4.5 4.5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
+  const icoPlus='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8fb4ff" stroke-width="2"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="M12 8v8M8 12h8" stroke-linecap="round"/></svg>';
+  function steps(kind){
+    if(kind==='ios'||(!kind&&isIOS))return{sub:'Safari on iPhone has no install prompt - three quick taps:',s:[
+      'Tap <b>Share</b> '+icoShare+' in the Safari bar',
+      'Choose <b>Add to Home Screen</b> '+icoPlus,
+      'Tap <b>Add</b> - it lands next to your apps']};
+    if(kind==='android'||(!kind&&/android/i.test(ua)))return{sub:'Chrome keeps it behind the menu - three quick taps:',s:[
+      'Tap the <b>&#8942;</b> menu in Chrome',
+      'Choose <b>Add to Home screen</b> or <b>Install app</b>',
+      'Tap <b>Install</b> - it lands next to your apps']};
+    return{sub:'This browser can install it as an app:',s:[
+      'Open the browser <b>menu</b>, or the install icon in the address bar',
+      'Choose <b>Install TicTacToe Extended</b>',
+      'Confirm - it opens in its own window']};
+  }
+  function openSheet(kind){const t=steps(kind);$('#ihsub').textContent=t.sub;$('#ihsteps').innerHTML=t.s.map((x,i)=>'<div class="ihstep"><span class="ihn">'+(i+1)+'</span><span>'+x+'</span></div>').join('');$('#installhelp').showModal()}
+  async function install(){
+    if(deferred){const d=deferred;deferred=null;try{d.prompt();const c=await d.userChoice;if(c&&c.outcome==='accepted'){syncChip();hideToast()}}catch(e){openSheet()}return}
+    openSheet();
+  }
+  function hideToast(){const t=$('#installtoast');if(t)t.hidden=true}
+  function showToast(kind){
+    const t=$('#installtoast');if(!t)return;
+    $('#ittitle').textContent=kind==='streak'?"You've won 3 times in a row":"That's 5 games finished";
+    $('#itsub').textContent=kind==='streak'?"You're clearly good - add this game to your Home Screen.":'One tap from your board, like an app.';
+    t.hidden=false;
+  }
+  function markShown(){st.shown=true;save(st)}
+  function maybeToast(){
+    if(installed()||st.shown)return;
+    if(st.streak>=3){showToast('streak');markShown()}
+    else if(st.games>=5){showToast('games');markShown()}
+  }
+  function finished(w){
+    st.games++;
+    const onl=window.Online&&Online.active&&Online.active();
+    const spec=onl&&Online.spectating&&Online.spectating();
+    if(!spec&&w&&w!=='D'){
+      const me=onl?(Online.seat&&Online.seat()):(cfg.mode==='cpu'?'X':'');
+      if(me)st.streak=w===me?st.streak+1:0;
+      else{st.streak=w===st.lastSeat?st.streak+1:1;st.lastSeat=w}
+    }
+    save(st);
+    setTimeout(maybeToast,overDelay()+900); // let the result dialog land first
+  }
+  if(demo==='games'||demo==='streak')setTimeout(()=>{showToast(demo)},1200);
+  const demoSheet=new URLSearchParams(location.search).get('sheet'); // demo: ?sheet=ios|android|desktop previews the install sheet
+  if(demoSheet)setTimeout(()=>openSheet(demoSheet),1200);
+  return{finished,install,syncChip,hideToast};
+})();
+$('#installbtn').onclick=()=>InstallNote.install();
+$('#itgo').onclick=()=>InstallNote.install();
+$('#itx').onclick=()=>InstallNote.hideToast();
+$('#ihok').onclick=()=>$('#installhelp').close();
+InstallNote.syncChip();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 
 // --- share result card (canvas -> PNG, Web Share API with download+copy fallback) ---
 const SHARE_URL='https://tttx.miraliyev.tech/';
@@ -1069,7 +1176,7 @@ $('#nmX').onclick=()=>editName('X');
 $('#nmO').onclick=()=>editName('O');
 window.__tttx={get G(){return G},setOnlineRule(r){onlineRule=r||null},effRule:()=>effRule(),effRule:()=>effRule(),deadGame:()=>deadGame(G),mkIco,setG(o){G=o},cfg,score,play:tap,move,badTap,warn,legal:()=>legal(G),oppMap:()=>oppMap(G),pace,render,persist,fresh:()=>{newGame()},localNew:newGame,showOver,overDelay,cardData,makeCardBlob,shareResult};
 </script>
-<script type="module" src="/online.js"></script>
+<script type="module" src="online.js"></script>
 <script>(()=>{
  let revealed=false,lastBoard='',eatClickUntil=0,sessionStarted=false;
  const signature=()=>JSON.stringify(window.__tttx?.G?.cells||[]);

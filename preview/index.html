@@ -320,14 +320,18 @@ footer a:hover{opacity:.7}
   body{min-height:100svh}
   #status{margin-top:clamp(24px,5.5svh,48px)}
   main{padding:2px 5px 6px}
-  .pillrow{margin-top:clamp(24px,6.5svh,56px);flex-wrap:wrap;gap:8px}
-  .pillrow button{padding:12px 12px;font-size:13px}
+  .pillrow{margin-top:clamp(24px,6.5svh,56px);flex-wrap:nowrap;gap:6px}
+  .pillrow button{padding:12px 10px;font-size:13px}
   #capline{display:none}
   /* invite banner up: relax the spread so the banner stays fully on screen */
   body:has(#waitbar.on) #status{margin-top:0}
   body:has(#waitbar.on) .pillrow{margin-top:2px}
   body:has(#waitbar.on) #waitbar{margin:4px 12px 6px}
   body:has(#waitbar.on) #hintrow{display:none}
+}
+@media (max-width:359px){
+  .pillrow{flex-wrap:wrap;gap:8px}
+  .pillrow button{padding:12px 12px}
 }
 @media(min-width:641px){
  body{--board:min(72vw,calc(66.6667svh + 6.6667px),calc(100svh - var(--top) - var(--sg) - 125px));--top:clamp(76px,11.75svh,94px);--sg:clamp(20px,calc(13.333svh - 66.667px),40px);min-height:100svh}
