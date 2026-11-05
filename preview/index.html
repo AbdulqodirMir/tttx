@@ -958,12 +958,12 @@ const InstallNote=(()=>{
   function syncChip(){const b=$('#installbtn');if(b)b.hidden=installed()}
   const icoShare='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8fb4ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M7.5 7.5L12 3l4.5 4.5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
   const icoPlus='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8fb4ff" stroke-width="2"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="M12 8v8M8 12h8" stroke-linecap="round"/></svg>';
-  function steps(){
-    if(isIOS)return{sub:'Safari on iPhone has no install prompt - three quick taps:',s:[
+  function steps(kind){
+    if(kind==='ios'||(!kind&&isIOS))return{sub:'Safari on iPhone has no install prompt - three quick taps:',s:[
       'Tap <b>Share</b> '+icoShare+' in the Safari bar',
       'Choose <b>Add to Home Screen</b> '+icoPlus,
       'Tap <b>Add</b> - it lands next to your apps']};
-    if(/android/i.test(ua))return{sub:'Chrome keeps it behind the menu - three quick taps:',s:[
+    if(kind==='android'||(!kind&&/android/i.test(ua)))return{sub:'Chrome keeps it behind the menu - three quick taps:',s:[
       'Tap the <b>&#8942;</b> menu in Chrome',
       'Choose <b>Add to Home screen</b> or <b>Install app</b>',
       'Tap <b>Install</b> - it lands next to your apps']};
@@ -972,7 +972,7 @@ const InstallNote=(()=>{
       'Choose <b>Install TicTacToe Extended</b>',
       'Confirm - it opens in its own window']};
   }
-  function openSheet(){const t=steps();$('#ihsub').textContent=t.sub;$('#ihsteps').innerHTML=t.s.map((x,i)=>'<div class="ihstep"><span class="ihn">'+(i+1)+'</span><span>'+x+'</span></div>').join('');$('#installhelp').showModal()}
+  function openSheet(kind){const t=steps(kind);$('#ihsub').textContent=t.sub;$('#ihsteps').innerHTML=t.s.map((x,i)=>'<div class="ihstep"><span class="ihn">'+(i+1)+'</span><span>'+x+'</span></div>').join('');$('#installhelp').showModal()}
   async function install(){
     if(deferred){const d=deferred;deferred=null;try{d.prompt();const c=await d.userChoice;if(c&&c.outcome==='accepted'){syncChip();hideToast()}}catch(e){openSheet()}return}
     openSheet();
@@ -1003,6 +1003,8 @@ const InstallNote=(()=>{
     setTimeout(maybeToast,overDelay()+900); // let the result dialog land first
   }
   if(demo==='games'||demo==='streak')setTimeout(()=>{showToast(demo)},1200);
+  const demoSheet=new URLSearchParams(location.search).get('sheet'); // demo: ?sheet=ios|android|desktop previews the install sheet
+  if(demoSheet)setTimeout(()=>openSheet(demoSheet),1200);
   return{finished,install,syncChip,hideToast};
 })();
 $('#installbtn').onclick=()=>InstallNote.install();
