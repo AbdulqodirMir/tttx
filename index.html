@@ -955,6 +955,7 @@ const InstallNote=(()=>{
   addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferred=e});
   addEventListener('appinstalled',()=>{syncChip();hideToast()});
   const dmm=matchMedia('(display-mode: standalone)');if(dmm.addEventListener)dmm.addEventListener('change',syncChip);
+  function syncChip(){const b=$('#installbtn');if(b)b.hidden=installed()}
   const icoShare='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8fb4ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M7.5 7.5L12 3l4.5 4.5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
   const icoPlus='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8fb4ff" stroke-width="2"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="M12 8v8M8 12h8" stroke-linecap="round"/></svg>';
   function steps(){
