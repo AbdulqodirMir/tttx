@@ -320,7 +320,7 @@ footer a:hover{opacity:.7}
   body{min-height:100svh}
   #status{margin-top:clamp(24px,5.5svh,48px)}
   main{padding:2px 5px 6px}
-  .pillrow{margin-top:clamp(24px,6.5svh,56px);flex-wrap:nowrap;gap:8px}
+  .pillrow{margin-top:clamp(24px,6.5svh,56px);flex-wrap:wrap;gap:8px}
   .pillrow button{padding:12px 12px;font-size:13px}
   #capline{display:none}
   /* invite banner up: relax the spread so the banner stays fully on screen */
@@ -392,7 +392,7 @@ body.game-focus header:focus-within,body.game-focus .pillrow:focus-within{opacit
 body.table-playing #big .box,body.table-playing #big .box.dim{opacity:1!important}body.table-playing #big .cell:empty{background:rgba(245,243,238,.15)}
 
 #installtoast{position:fixed;left:16px;right:16px;bottom:max(20px,env(safe-area-inset-bottom));z-index:60;display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:24px;background:rgba(10,12,24,.92);border:1px solid rgba(245,243,238,.2);box-shadow:0 24px 80px rgba(0,0,0,.55);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);max-width:430px;margin:0 auto;box-sizing:border-box}
-#installtoast[hidden],.hchip[hidden]{display:none}
+#installtoast[hidden],#installbtn[hidden]{display:none}
 #installtoast img{border-radius:10px;flex:none}
 #installtoast .ittext{flex:1;min-width:0}
 #installtoast .ittitle{font-size:13px;font-weight:600;color:var(--tx)}
@@ -409,7 +409,7 @@ body.table-playing #big .box,body.table-playing #big .box.dim{opacity:1!importan
 <header>
   <div class="hleft"><img class="eagle" src="favicon-32.png" alt="" width="26" height="26"><div class="brand">TicTacToe <em>Extended</em></div></div>
   <a class="backpill" href="https://miraliyev.tech" title="Back to miraliyev.tech">&larr; miraliyev.tech</a>
-  <div class="hchips"><button id="online" class="hchip" title="Play online"><span class="dot"></span>Online</button><button id="installbtn" class="hchip" title="Add to Home Screen" hidden><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M12 3v11"/><path d="M7.5 9.5L12 14l4.5-4.5"/><path d="M4.5 17.5v1.6a1.9 1.9 0 0 0 1.9 1.9h11.2a1.9 1.9 0 0 0 1.9-1.9v-1.6"/></svg>Install</button><button id="undo" class="hchip" title="Undo">Undo</button><button id="redo" class="hchip" title="Redo" disabled>Redo</button><button id="menu" class="hchip" title="Settings">Settings</button></div>
+  <div class="hchips"><button id="online" class="hchip" title="Play online"><span class="dot"></span>Online</button><button id="undo" class="hchip" title="Undo">Undo</button><button id="redo" class="hchip" title="Redo" disabled>Redo</button><button id="menu" class="hchip" title="Settings">Settings</button></div>
 </header>
 <div id="status">
   <span class="pl" id="plX"><span class="mk"><svg viewBox="0 0 100 100"><path class="mark mx" d="M22 22L78 78M78 22L22 78"/></svg></span><span id="nmX">You</span><span class="num mX" id="scX">0</span></span>
@@ -418,7 +418,7 @@ body.table-playing #big .box,body.table-playing #big .box.dim{opacity:1!importan
   <span class="turn" id="chip">X to move</span>
 </div>
 <main><div id="big"></div></main>
-<div class="pillrow"><button id="share2" class="solid" style="display:none">Share result</button><button id="playbtn" class="acc">Play online</button><button id="new">New game</button><button id="howbtn">How it works</button></div>
+<div class="pillrow"><button id="share2" class="solid" style="display:none">Share result</button><button id="playbtn" class="acc">Play online</button><button id="new">New game</button><button id="howbtn">How it works</button><button id="installbtn" title="Add to Home Screen" hidden><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px"><path d="M12 3v11"/><path d="M7.5 9.5L12 14l4.5-4.5"/><path d="M4.5 17.5v1.6a1.9 1.9 0 0 0 1.9 1.9h11.2a1.9 1.9 0 0 0 1.9-1.9v-1.6"/></svg>Install</button></div>
 <div id="hintrow"><span id="hint"></span><span id="score"></span></div><div id="capline"><span></span></div>
 
 <dialog id="dlg" class="wide">
@@ -980,7 +980,7 @@ const InstallNote=(()=>{
   function hideToast(){const t=$('#installtoast');if(t)t.hidden=true}
   function showToast(kind){
     const t=$('#installtoast');if(!t)return;
-    $('#ittitle').textContent=kind==='streak'?"You've won 3 in a row":"That's 5 games finished";
+    $('#ittitle').textContent=kind==='streak'?"You've won 3 times in a row":"That's 5 games finished";
     $('#itsub').textContent=kind==='streak'?"You're clearly good - add this game to your Home Screen.":'One tap from your board, like an app.';
     t.hidden=false;
   }
