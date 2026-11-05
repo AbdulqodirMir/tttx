@@ -974,7 +974,7 @@ const InstallNote=(()=>{
   }
   function openSheet(){const t=steps();$('#ihsub').textContent=t.sub;$('#ihsteps').innerHTML=t.s.map((x,i)=>'<div class="ihstep"><span class="ihn">'+(i+1)+'</span><span>'+x+'</span></div>').join('');$('#installhelp').showModal()}
   async function install(){
-    if(deferred){try{deferred.prompt();const c=await deferred.userChoice;deferred=null;if(c&&c.outcome==='accepted'){syncChip();hideToast();return}}catch(e){}}
+    if(deferred){const d=deferred;deferred=null;try{d.prompt();const c=await d.userChoice;if(c&&c.outcome==='accepted'){syncChip();hideToast()}}catch(e){openSheet()}return}
     openSheet();
   }
   function hideToast(){const t=$('#installtoast');if(t)t.hidden=true}
