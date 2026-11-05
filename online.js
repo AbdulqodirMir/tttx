@@ -228,12 +228,12 @@ function enterRoom(id,asSeat,spec,keepLobby){
   roomOff=onValue(r,snap=>{
     const v=snap.val();
     if(!v){
-      if(room){
-        const hadOpp=room.players&&room.players.X&&room.players.O;
-        const oppNick=hadOpp?(pn((room.players[seat==='X'?'O':'X']||{}).nick||'Opponent')):'Opponent';
-        cleanupRoom();
-        toast(hadOpp?oppNick+' left - back to local play':'Room closed');
-      }
+      if(roomId!==id)return;
+      const hadOpp=room&&room.players&&room.players.X&&room.players.O;
+      const oppNick=hadOpp?(pn((room.players[seat==='X'?'O':'X']||{}).nick||'Opponent')):'Opponent';
+      const wasSpec=spectate;
+      cleanupRoom();
+      toast(hadOpp&&!wasSpec?oppNick+' left - back to local play':'Room closed - back to the game');
       return
     }
     room=v;
@@ -319,11 +319,15 @@ function enterRoom(id,asSeat,spec,keepLobby){
     }
   });
 }
+function leaveRoomUrl(){
+  try{const u=new URL(location.href);if(u.searchParams.has('room')||u.searchParams.has('as')){u.searchParams.delete('room');u.searchParams.delete('as');history.replaceState(null,'',u.pathname+(u.search||'')+u.hash)}}catch(e){}
+}
 function cleanupRoom(){
   if(roomOff){roomOff();roomOff=null}
   stopOppWatch();
   if(goneRef){onDisconnect(goneRef).cancel();set(goneRef,null).catch(()=>{});goneRef=null}
   room=null;roomId=null;seat=null;spectate=false;seenMC=-1;seenGameId=null;roomLink='';
+  leaveRoomUrl();
   T().setOnlineRule(null);
   $('#obar').style.display='none';
   if($('#startnotice')?.open)$('#startnotice').close();
@@ -391,8 +395,16 @@ Online.statusText=function(){
   return{chip:g.turn===seat?'Your move':pn((room.players[otherSeat()]||{}).nick)+' to move',hint:g.turn===seat?'':'Wait for your turn'};
 };
 function otherSeat(){return seat==='X'?'O':'X'}
-Online.requestRematch=function(){
-  if(!room||spectate)return;
+Online.requestRematch=async function(){
+  if(!roomId)return;
+  const id=roomId;
+  if(spectate){leaveRoom();toast('Left the room - new local game');return}
+  let alive=!!room;
+  if(alive){try{alive=!!(await get(ref(db,'rooms/'+id))).val()}catch(e){}}
+  if(roomId!==id)return;
+  if(!alive){cleanupRoom();toast('Room closed - back to the game');return}
+  if(room.status==='waiting'){toast('Waiting for an opponent to join first');return}
+  if(oppGone){toast('Opponent is reconnecting - one moment');return}
   set(ref(db,'rooms/'+roomId+'/rematch/'+seat),true).catch(()=>{});
   toast('New round offered - both players agree, then X is drawn at random');
 };
@@ -569,7 +581,7 @@ async function boot(){
     me=await ready;await presenceOn();
     const rr=ref(db,'rooms/'+join);
     const rv=(await get(rr)).val();
-    if(!rv){toast('That room is closed');return}
+    if(!rv){leaveRoomUrl();toast('That room is closed - here is a fresh game');await presenceOn();invitesOn();wireReconnect();return}
     const pendingSeat=['X','O'].find(k=>rv.players&&rv.players[k]&&rv.players[k].pending);
     if(q.get('as')==='host'&&pendingSeat){
       // Widget and game have different anonymous logins. Claim the reserved person, not a fixed symbol.
