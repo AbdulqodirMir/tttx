@@ -342,7 +342,7 @@ function leaveRoom(){
   const r=room,id=roomId;
   const iPlay=r&&id&&!spectate&&r.players&&((r.players.X&&r.players.X.uid===me.uid)||(r.players.O&&r.players.O.uid===me.uid));
   cleanupRoom();
-  if(iPlay)remove(ref(db,'rooms/'+id)).catch(()=>{});
+  if(iPlay){remove(ref(db,'rooms/'+id)).catch(()=>{});if(r.status==='waiting')clearInviteRate()}
 }
 Online.leave=leaveRoom;
 Online.names=function(){if(!room)return null;const px=room.players&&room.players.X,po=room.players&&room.players.O;return{X:px&&pn(px.nick)||'\u2026',O:po&&pn(po.nick)||'\u2026'}};
@@ -429,6 +429,9 @@ function wireReconnect(){
 }
 
 // ---------- invites ----------
+// Tearing down our own never-started waiting room frees the sender at once: the rate
+// entries slow room/invite spam, they must not hold someone whose invite just ended.
+function clearInviteRate(){if(me)update(ref(db,'rate/'+me.uid),{lastRoom:0,lastInvite:0}).catch(()=>{})}
 async function sendInvite(toUid,toNick,btn){
   toNick=pn(toNick);
   const rate=(await get(ref(db,'rate/'+me.uid))).val()||{};
@@ -450,7 +453,7 @@ async function sendInvite(toUid,toNick,btn){
   try{const its=(await get(ir)).val();if(its&&its.ts)deadline=its.ts+INVITE_TTL}catch(e){}
   const tick=()=>{const left=Math.max(0,Math.ceil((deadline-nowSrv())/1000));wspan.textContent='Invited '+toNick+' - waiting for answer ('+left+'s)'};
   tick();const cd=setInterval(tick,1000);
-  const wc=$('#waitcancel');if(wc){wc.style.display='';wc.onclick=()=>{clearInterval(cd);update(ir,{status:'cancelled'}).catch(()=>{});remove(ref(db,'rooms/'+id)).catch(()=>{});if(sentInvite){sentInvite();sentInvite=null}wbHide(wb);wc.style.display='none';btn.disabled=false;btn.textContent='Invite';toast('Invite cancelled')}}
+  const wc=$('#waitcancel');if(wc){wc.style.display='';wc.onclick=()=>{clearInterval(cd);update(ir,{status:'cancelled'}).catch(()=>{});remove(ref(db,'rooms/'+id)).catch(()=>{});clearInviteRate();if(sentInvite){sentInvite();sentInvite=null}wbHide(wb);wc.style.display='none';btn.disabled=false;btn.textContent='Invite';toast('Invite cancelled')}}
   const clearWait=()=>{clearInterval(cd);wbHide(wb);if(wc)wc.style.display='none'};
   if(sentInvite)sentInvite();
   const rref=ref(db,'rooms/'+id);
@@ -460,21 +463,21 @@ async function sendInvite(toUid,toNick,btn){
   sentInvite=onValue(rref,snap=>{
     const v=snap.val();if(!v)return;
     const o=v.players&&v.players.O;
-    if(o&&o.declined){stopWatch();clearWait();rearm();toast(toNick+(o.busy?' is already in a game':(o.timeout?" didn't answer - invite expired":' declined')));remove(rref).catch(()=>{});update(ir,{status:o.busy?'busy':(o.timeout?'expired':'declined')}).catch(()=>{})}
+    if(o&&o.declined){stopWatch();clearWait();rearm();toast(toNick+(o.busy?' is already in a game':(o.timeout?" didn't answer - invite expired":' declined')));remove(rref).catch(()=>{});clearInviteRate();update(ir,{status:o.busy?'busy':(o.timeout?'expired':'declined')}).catch(()=>{})}
     else if(o&&v.status==='playing'){stopWatch();clearWait();toast(toNick+' joined - game on!');enterRoom(id,'X',false)}
   });
   invWatch=onValue(ir,s=>{
     if(!sentInvite)return;
     const st=(s.val()||{}).status;
-    if(st==='busy'){stopWatch();clearWait();rearm();toast(toNick+' is already in a game');remove(rref).catch(()=>{})}
+    if(st==='busy'){stopWatch();clearWait();rearm();toast(toNick+' is already in a game');remove(rref).catch(()=>{});clearInviteRate()}
   });
   presWatch=onValue(ref(db,'presence/'+toUid),ps=>{
     if(!sentInvite)return; // already resolved
     const pv=ps.val();
     const stale=!pv||!pv.ts||(nowSrv()-pv.ts>90000); // dead tab leaves a stale row, not null
-    if(stale){stopWatch();clearWait();rearm();toast(toNick+' went offline');update(ir,{status:'offline'}).catch(()=>{});remove(rref).catch(()=>{})}
+    if(stale){stopWatch();clearWait();rearm();toast(toNick+' went offline');update(ir,{status:'offline'}).catch(()=>{});remove(rref).catch(()=>{});clearInviteRate()}
   });
-  setTimeout(()=>{if(!sentInvite)return;get(rref).then(s=>{const v=s.val();if(v&&v.status==='waiting'&&!(v.players&&v.players.O)){stopWatch();clearWait();rearm();toast(toNick+" didn't answer - invite expired");update(ir,{status:'expired'}).catch(()=>{});remove(rref).catch(()=>{})}})},Math.max(3000,deadline+3000-nowSrv()));
+  setTimeout(()=>{if(!sentInvite)return;get(rref).then(s=>{const v=s.val();if(v&&v.status==='waiting'&&!(v.players&&v.players.O)){stopWatch();clearWait();rearm();toast(toNick+" didn't answer - invite expired");update(ir,{status:'expired'}).catch(()=>{});remove(rref).catch(()=>{});clearInviteRate()}})},Math.max(3000,deadline+3000-nowSrv()));
 }
 function invitesOn(){
   // never judge invite age before the server-time offset arrives: with tOff=0 a skewed

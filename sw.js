@@ -1,5 +1,5 @@
 // TicTacToe Extended - minimal offline shell. Bump CACHE on every release.
-const CACHE='tttx-v3.7.6-invitefix1';
+const CACHE='tttx-v3.7.7-cancelfix1';
 const CORE=['./','index.html','online.js','js/fb.js','manifest.webmanifest','favicon.svg','favicon-16.png','favicon-32.png','favicon-mark-32.png','apple-touch-icon.png','icon-192.png','icon-512.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});

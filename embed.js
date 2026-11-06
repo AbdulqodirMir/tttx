@@ -412,15 +412,18 @@ function clearOut(keepRoom){
 function outEnd(msg,sub,coolMs){
   var o=out;if(!o)return;
   DB.update(o.ir,{status:o.final||'expired'}).catch(function(){});
-  clearOut(false);if(coolMs){cool[o.uid]=Date.now()+coolMs;renderLobby()}
+  clearOut(false);clearInviteRate();if(coolMs){cool[o.uid]=Date.now()+coolMs;renderLobby()}
   closeT(outT);
   outT=buildToast({cls:'out',nick:o.nick,title:msg,sub:sub,ms:0,life:4500,onEnd:function(){closeT(outT)}});layout();
   if(coolMs)setTimeout(function(){renderLobby()},coolMs+50);
 }
+/* Tearing down our own never-started waiting room frees the sender at once: the rate
+   entry slows invite spam, it must not hold someone whose invite just ended. */
+function clearInviteRate(){if(me_)DB.update(DB.ref(db,'rate/'+me_.uid),{lastRoom:0,lastInvite:0}).catch(function(){})}
 function cancelOut(){
   if(!out)return;var o=out;
   DB.update(o.ir,{status:'cancelled'}).catch(function(){});
-  clearOut(false);closeT(outT);renderLobby();
+  clearOut(false);clearInviteRate();closeT(outT);renderLobby();
 }
 function joinOut(){
   if(!out)return;var o=out;
