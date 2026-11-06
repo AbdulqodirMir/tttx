@@ -23,7 +23,7 @@ function sameDev(p){return p&&((p.dk&&p.dk===MY_DK)||(p.fp&&p.fp===MY_FP))}
 
 const rid=()=>{const a='abcdefghjkmnpqrstuvwxyz23456789';let s='';for(let i=0;i<6;i++)s+=a[Math.random()*a.length|0];return s};
 
-let tOff=0;
+let tOff=0,offReady=false;
 const nowSrv=()=>Date.now()+tOff;
 let me=null, myNick=localStorage.getItem('tttx-nick')||nick();
 localStorage.setItem('tttx-nick',myNick);
@@ -72,6 +72,9 @@ let plistOn=false;
 async function presenceOn(){
   me=await ready;
   onValue(ref(db,'.info/serverTimeOffset'),s=>{tOff=s.val()||0});
+  // the offset listener fires at once with the placeholder 0; only the connection
+  // handshake produces a real estimate, so treat the offset as usable from connected
+  onValue(ref(db,'.info/connected'),s=>{if(s.val())offReady=true});
   const p=ref(db,'presence/'+me.uid);
   const hide=localStorage.getItem('tttx-hide')==='1';
   const beat=()=>set(p,{nick:myNick,ts:serverTimestamp(),hide,room:roomId||null,dk:MY_DK,fp:MY_FP});
@@ -439,8 +442,13 @@ async function sendInvite(toUid,toNick,btn){
   toast('Invite sent to '+toNick);
   roomLink=location.origin+location.pathname+'?room='+id;
   const wb=$('#waitbar');wbShow(wb);
-  const wspan=wb.querySelector('span');const t0=Date.now();
-  const tick=()=>{const left=Math.max(0,30-Math.floor((Date.now()-t0)/1000));wspan.textContent='Invited '+toNick+' - waiting for answer ('+left+'s)'};
+  const wspan=wb.querySelector('span');
+  // Anchor the countdown and the sweep to the invite's server timestamp (iv.ts): receivers
+  // expire the invite at iv.ts+TTL, so a local-clock t0 let the bar show time left after the
+  // invite had already died (clock skew or slow send made the ends disagree by seconds).
+  let deadline=nowSrv()+INVITE_TTL;
+  try{const its=(await get(ir)).val();if(its&&its.ts)deadline=its.ts+INVITE_TTL}catch(e){}
+  const tick=()=>{const left=Math.max(0,Math.ceil((deadline-nowSrv())/1000));wspan.textContent='Invited '+toNick+' - waiting for answer ('+left+'s)'};
   tick();const cd=setInterval(tick,1000);
   const wc=$('#waitcancel');if(wc){wc.style.display='';wc.onclick=()=>{clearInterval(cd);update(ir,{status:'cancelled'}).catch(()=>{});remove(ref(db,'rooms/'+id)).catch(()=>{});if(sentInvite){sentInvite();sentInvite=null}wbHide(wb);wc.style.display='none';btn.disabled=false;btn.textContent='Invite';toast('Invite cancelled')}}
   const clearWait=()=>{clearInterval(cd);wbHide(wb);if(wc)wc.style.display='none'};
@@ -466,9 +474,13 @@ async function sendInvite(toUid,toNick,btn){
     const stale=!pv||!pv.ts||(nowSrv()-pv.ts>90000); // dead tab leaves a stale row, not null
     if(stale){stopWatch();clearWait();rearm();toast(toNick+' went offline');update(ir,{status:'offline'}).catch(()=>{});remove(rref).catch(()=>{})}
   });
-  setTimeout(()=>{if(!sentInvite)return;get(rref).then(s=>{const v=s.val();if(v&&v.status==='waiting'&&!(v.players&&v.players.O)){stopWatch();clearWait();rearm();toast(toNick+" didn't answer - invite expired");update(ir,{status:'expired'}).catch(()=>{});remove(rref).catch(()=>{})}})},INVITE_TTL+3000);
+  setTimeout(()=>{if(!sentInvite)return;get(rref).then(s=>{const v=s.val();if(v&&v.status==='waiting'&&!(v.players&&v.players.O)){stopWatch();clearWait();rearm();toast(toNick+" didn't answer - invite expired");update(ir,{status:'expired'}).catch(()=>{});remove(rref).catch(()=>{})}})},Math.max(3000,deadline+3000-nowSrv()));
 }
 function invitesOn(){
+  // never judge invite age before the server-time offset arrives: with tOff=0 a skewed
+  // local clock inflates the age and the toast would die (and mark the invite expired)
+  // seconds before the real TTL - the sender's bar then shows time left on a dead invite.
+  if(!offReady){const w=setInterval(()=>{if(offReady){clearInterval(w);invitesOn()}},150);return}
   onValue(ref(db,'invites/'+me.uid),snap=>{
     const v=snap.val()||{},now=nowSrv();
     for(const[k,iv]of Object.entries(v)){

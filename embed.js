@@ -429,7 +429,9 @@ function joinOut(){
 }
 function showWaiting(){
   closeT(outT);var o=out,d=dn(o.nick);
-  outT=buildToast({cls:'out',nick:o.nick,title:isApp?'Waiting for '+d.name:'Inviting '+d.name,sub:isApp?'EXPIRES IN 30 S':'Waiting for an answer \u00B7 30 s',cd:function(n){return isApp?'EXPIRES IN '+n+' S':'Waiting for an answer \u00B7 '+n+' s'},ms:30000,no:'Cancel',onNo:cancelOut});layout();
+  /* anchored to the invite's server timestamp when known: the receiver expires at iv.ts+30 s, so a local start made the ring show time left after the invite had already died */
+  var left=o.deadline?Math.max(3000,o.deadline-srvNow()):30000;
+  outT=buildToast({cls:'out',nick:o.nick,title:isApp?'Waiting for '+d.name:'Inviting '+d.name,sub:isApp?'EXPIRES IN 30 S':'Waiting for an answer \u00B7 30 s',cd:function(n){return isApp?'EXPIRES IN '+n+' S':'Waiting for an answer \u00B7 '+n+' s'},ms:left,no:'Cancel',onNo:cancelOut});layout();
 }
 function showReady(){
   closeT(outT);var o=out,d=dn(o.nick);
@@ -473,7 +475,7 @@ function sendInvite(p){
     if(out!==mine){DB.remove(DB.ref(db,'rooms/'+id)).catch(function(){});return}
     mine.roomId=id;
     var ir=DB.push(DB.ref(db,'invites/'+p.uid));mine.ir=ir;
-    DB.set(ir,{from:me_.uid,fromNick:myNick,fromSite:host,roomId:id,ts:DB.serverTimestamp(),status:'pending'});
+    DB.set(ir,{from:me_.uid,fromNick:myNick,fromSite:host,roomId:id,ts:DB.serverTimestamp(),status:'pending'}).then(function(){return DB.get(ir)}).then(function(s){var v=s.val();if(out!==mine)return;mine.deadline=((v&&v.ts)||srvNow())+30000;showWaiting();mine.timer=setTimeout(function(){if(out===mine&&mine.state==='waiting'){mine.final='expired';outEnd('No answer from '+dn(p.nick).name,'Invite expired after 30 s',20000)}},Math.max(3000,mine.deadline+3000-srvNow()))}).catch(function(){});
     DB.update(DB.ref(db,'rate/'+me_.uid),{lastInvite:Date.now()});
     renderLobby();showWaiting();
     mine.offs.push(DB.onValue(DB.ref(db,'rooms/'+id),function(snap){
@@ -487,14 +489,13 @@ function sendInvite(p){
       if(out!==mine||mine.state!=='waiting')return;
       var pv=ps.val();if(!pv||!pv.ts||srvNow()-pv.ts>90000){mine.final='offline';outEnd(dn(p.nick).name+' went offline','Invite withdrawn',0)}
     }));
-    mine.timer=setTimeout(function(){if(out===mine&&mine.state==='waiting'){mine.final='expired';outEnd('No answer from '+dn(p.nick).name,'Invite expired after 30 s',20000)}},33000);
   }).catch(function(){if(out===mine){out=null;renderLobby()}showSimple(p.nick,'Could not send the invite','Check your connection and try again')});
 }
 function showSimple(nick,title,sub){closeT(outT);outT=buildToast({cls:'out',nick:nick,title:title,sub:sub,ms:0,life:4000,onEnd:function(){closeT(outT)}});layout()}
 window.addEventListener('pagehide',function(){if(out&&out.state==='waiting'&&out.ir){DB.update(out.ir,{status:'cancelled'}).catch(function(){});DB.remove(DB.ref(db,'rooms/'+out.roomId)).catch(function(){})}});
 
 /* ---------- firebase ---------- */
-var FBA,DB,db,auth,me_=null,tOff=0,myNick;
+var FBA,DB,db,auth,me_=null,tOff=0,offReady=false,myNick;
 var ADJ=['Swift','Calm','Bright','Lucky','Quiet','Merry','Bold','Clever','Gentle','Mighty','Nimble','Proud','Rapid','Sunny','Witty','Zesty','Cosy','Eager'];
 var ANI=['Fox','Owl','Bear','Wolf','Lynx','Hawk','Deer','Frog','Crow','Seal','Wren','Elk','Jay','Mole','Hare','Newt','Ibex','Toad','Vole','Puma'];
 function newNick(){return ADJ[Math.random()*ADJ.length|0]+ANI[Math.random()*ANI.length|0]+(10+Math.random()*90|0)}
@@ -508,6 +509,9 @@ Promise.all([import(FB+'firebase-app.js'),import(FB+'firebase-auth.js'),import(F
 }).then(function(cred){
   me_=cred.user;window.__dbg={DB:DB,db:db,uid:me_.uid};
   DB.onValue(DB.ref(db,'.info/serverTimeOffset'),function(s){tOff=s.val()||0});
+  /* the offset listener fires at once with the placeholder 0; only the connection
+     handshake produces a real estimate, so treat the offset as usable from connected */
+  DB.onValue(DB.ref(db,'.info/connected'),function(s){if(s.val())offReady=true});
   var p=DB.ref(db,'presence/'+me_.uid);
   var beat=function(){DB.set(p,{nick:myNick,ts:DB.serverTimestamp(),hide:false,room:null,site:host,dk:MY_DK,fp:MY_FP})};
   beat();DB.onDisconnect(p).remove();setInterval(beat,25000);
@@ -521,8 +525,11 @@ Promise.all([import(FB+'firebase-app.js'),import(FB+'firebase-auth.js'),import(F
   }
   DB.onValue(DB.ref(db,'presence'),function(snap){rawV=snap.val()||{};refresh()});
   setInterval(refresh,15000);
-  /* incoming invites: queue, one toast at a time, never twice for the same invite */
-  DB.onValue(DB.ref(db,'invites/'+me_.uid),function(snap){
+  /* incoming invites: queue, one toast at a time, never twice for the same invite.
+     attach only once the server-time offset is in: with tOff=0 a skewed local clock
+     inflates the invite age, the toast dies early and markRoom(timeout) kills the room
+     while the sender's countdown still shows seconds left */
+  function wireInvites(){DB.onValue(DB.ref(db,'invites/'+me_.uid),function(snap){
     var v=snap.val()||{},now=srvNow();
     Object.keys(v).forEach(function(k){
       var iv=v[k];
@@ -531,7 +538,8 @@ Promise.all([import(FB+'firebase-app.js'),import(FB+'firebase-auth.js'),import(F
       seen[k]=1;queue.push({iv:iv,key:k});
     });
     next();
-  });
+  })}
+  if(offReady)wireInvites();else{var offW=setInterval(function(){if(offReady){clearInterval(offW);wireInvites()}},150)}
 }).catch(function(){/* offline or blocked: widget stays as a static Play link */});
 
 (document.body||document.documentElement).appendChild(rootEl);
